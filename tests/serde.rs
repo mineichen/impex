@@ -19,7 +19,8 @@ fn serialize_with_defaults() {
     );
 }
 
-#[derive(serde::Deserialize, serde::Serialize /*, Impex */)]
+#[derive(serde::Deserialize, serde::Serialize)]
+// #[derive(Impex)]
 struct Config {
     num_cores: u32,
     num_threads: u32,
@@ -36,7 +37,8 @@ impl Default for Config {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize /*, Impex */)]
+#[derive(serde::Deserialize, serde::Serialize)]
+// #[derive(Impex)]
 struct SubConfig {
     foo: String,
     bar: String,
