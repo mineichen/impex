@@ -11,13 +11,15 @@ fn serialize_with_defaults() {
     assert_eq!(text, serde_json::to_string(&obj).unwrap().as_str());
     //obj.sub.bar.set("Custom".into());
     *obj.sub.bar.make_defined() = "Custom".into();
+    assert_eq!("Custom", *obj.sub.bar);
+    assert_eq!("Foo", *obj.sub.foo);
     assert_eq!(
         r#"{"num_cores":3,"sub":{"bar":"Custom"}}"#,
         serde_json::to_string(&obj).unwrap().as_str()
     );
 }
 
-#[derive(serde::Deserialize, serde::Serialize /*, Explicit*/)]
+#[derive(serde::Deserialize, serde::Serialize /*, Impex */)]
 struct Config {
     num_cores: u32,
     num_threads: u32,
@@ -34,10 +36,19 @@ impl Default for Config {
     }
 }
 
-#[derive(Default, serde::Deserialize, serde::Serialize /*, Explicit*/)]
+#[derive(serde::Deserialize, serde::Serialize /*, Impex */)]
 struct SubConfig {
     foo: String,
     bar: String,
+}
+
+impl Default for SubConfig {
+    fn default() -> Self {
+        Self {
+            foo: "Foo".into(),
+            bar: "Bar".into(),
+        }
+    }
 }
 
 ///
