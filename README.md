@@ -7,3 +7,5 @@ It solves the usecase to load partially defined data from a json (taking the res
 
 ## Status
 This repos is in prototype state. It doesn't use any macros yet. The code in autogenerate section of serde.rs is expected to be in a state where it is trivial to put into a macro later.
+
+Thank you for all the inputs during the impl day at EuroRust in Paris. Feel welcome to participate.
