@@ -7,8 +7,17 @@ pub struct MaybeExplicit<T> {
 }
 
 impl<T> MaybeExplicit<T> {
-    pub fn is_implicit(&self) -> bool {
-        !self.is_explicit
+    pub fn make_defined(&mut self) -> &mut T {
+        self.is_explicit = true;
+        &mut self.value
+    }
+
+    pub fn set(&mut self, v: T) {
+        *self.make_defined() = v;
+    }
+
+    pub fn into_value(self) -> T {
+        self.value
     }
 }
 
@@ -53,11 +62,14 @@ impl<T: Default> Default for MaybeExplicit<T> {
 }
 
 pub trait IntoExplicit {
-    type Value;
+    type Value: Explicit;
     fn into_implicit(self) -> Self::Value;
-    fn is_explicit(value: &Self::Value) -> bool;
-    fn is_implicit(value: &Self::Value) -> bool {
-        !Self::is_explicit(value)
+}
+
+pub trait Explicit {
+    fn is_explicit(&self) -> bool;
+    fn is_implicit(&self) -> bool {
+        !self.is_explicit()
     }
 }
 
@@ -70,12 +82,13 @@ impl IntoExplicit for u32 {
             is_explicit: false,
         }
     }
-
-    fn is_explicit(value: &Self::Value) -> bool {
-        value.is_explicit
-    }
 }
 
+impl Explicit for MaybeExplicit<u32> {
+    fn is_explicit(&self) -> bool {
+        self.is_explicit
+    }
+}
 impl IntoExplicit for String {
     type Value = MaybeExplicit<Self>;
 
@@ -85,8 +98,9 @@ impl IntoExplicit for String {
             is_explicit: false,
         }
     }
-
-    fn is_explicit(value: &Self::Value) -> bool {
-        value.is_explicit
+}
+impl Explicit for MaybeExplicit<String> {
+    fn is_explicit(&self) -> bool {
+        self.is_explicit
     }
 }
