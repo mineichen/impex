@@ -57,12 +57,12 @@ impl<T: Default> Default for MaybeExplicit<T> {
     }
 }
 
-pub trait IntoExplicit {
-    type Explicit: Explicit;
+pub trait IntoImpex {
+    type Explicit: Impex;
     fn into_implicit(self) -> Self::Explicit;
 }
 
-pub trait Explicit {
+pub trait Impex {
     type Value;
 
     fn is_explicit(&self) -> bool;
@@ -72,7 +72,7 @@ pub trait Explicit {
     fn into_value(self) -> Self::Value;
 }
 
-impl IntoExplicit for u32 {
+impl IntoImpex for u32 {
     type Explicit = MaybeExplicit<Self>;
 
     fn into_implicit(self) -> Self::Explicit {
@@ -83,7 +83,7 @@ impl IntoExplicit for u32 {
     }
 }
 
-impl Explicit for MaybeExplicit<u32> {
+impl Impex for MaybeExplicit<u32> {
     type Value = u32;
 
     fn is_explicit(&self) -> bool {
@@ -94,7 +94,7 @@ impl Explicit for MaybeExplicit<u32> {
         self.value
     }
 }
-impl IntoExplicit for String {
+impl IntoImpex for String {
     type Explicit = MaybeExplicit<Self>;
 
     fn into_implicit(self) -> Self::Explicit {
@@ -104,7 +104,7 @@ impl IntoExplicit for String {
         }
     }
 }
-impl Explicit for MaybeExplicit<String> {
+impl Impex for MaybeExplicit<String> {
     type Value = String;
 
     fn is_explicit(&self) -> bool {

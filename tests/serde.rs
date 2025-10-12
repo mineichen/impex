@@ -1,6 +1,6 @@
 #[test]
 fn serialize_with_defaults() {
-    use impex::Explicit;
+    use impex::Impex;
 
     let text = r#"{"num_cores":3}"#;
     let mut obj = serde_json::from_str::<ExplicitConfig>(text).unwrap();
@@ -43,31 +43,31 @@ struct SubConfig {
 ///
 /// THE following will be auto generated
 ///
-impl ::impex::IntoExplicit for Config {
+impl ::impex::IntoImpex for Config {
     type Explicit = ExplicitConfig;
 
     fn into_implicit(self) -> Self::Explicit {
         Self::Explicit {
-            num_cores: ::impex::IntoExplicit::into_implicit(self.num_cores),
-            num_threads: ::impex::IntoExplicit::into_implicit(self.num_threads),
-            sub: ::impex::IntoExplicit::into_implicit(self.sub),
+            num_cores: ::impex::IntoImpex::into_implicit(self.num_cores),
+            num_threads: ::impex::IntoImpex::into_implicit(self.num_threads),
+            sub: ::impex::IntoImpex::into_implicit(self.sub),
         }
     }
 }
 
-impl ::impex::Explicit for ExplicitConfig {
+impl ::impex::Impex for ExplicitConfig {
     type Value = Config;
     fn is_explicit(&self) -> bool {
-        ::impex::Explicit::is_explicit(&self.num_cores)
-            || ::impex::Explicit::is_explicit(&self.num_threads)
-            || ::impex::Explicit::is_explicit(&self.sub)
+        ::impex::Impex::is_explicit(&self.num_cores)
+            || ::impex::Impex::is_explicit(&self.num_threads)
+            || ::impex::Impex::is_explicit(&self.sub)
     }
 
     fn into_value(self) -> Self::Value {
         Self::Value {
-            num_cores: ::impex::Explicit::into_value(self.num_cores),
-            num_threads: ::impex::Explicit::into_value(self.num_threads),
-            sub: ::impex::Explicit::into_value(self.sub),
+            num_cores: ::impex::Impex::into_value(self.num_cores),
+            num_threads: ::impex::Impex::into_value(self.num_threads),
+            sub: ::impex::Impex::into_value(self.sub),
         }
     }
 }
@@ -75,46 +75,46 @@ impl ::impex::Explicit for ExplicitConfig {
 #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 struct ExplicitConfig {
-    #[serde(skip_serializing_if = "::impex::Explicit::is_implicit")]
-    num_cores: <u32 as ::impex::IntoExplicit>::Explicit,
-    #[serde(skip_serializing_if = "::impex::Explicit::is_implicit")]
-    num_threads: <u32 as ::impex::IntoExplicit>::Explicit,
-    #[serde(skip_serializing_if = "::impex::Explicit::is_implicit")]
-    sub: <SubConfig as ::impex::IntoExplicit>::Explicit,
+    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    num_cores: <u32 as ::impex::IntoImpex>::Explicit,
+    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    num_threads: <u32 as ::impex::IntoImpex>::Explicit,
+    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    sub: <SubConfig as ::impex::IntoImpex>::Explicit,
 }
 
 impl Default for ExplicitConfig {
     fn default() -> Self {
         let c = Config::default();
         Self {
-            num_cores: ::impex::IntoExplicit::into_implicit(c.num_cores),
-            num_threads: ::impex::IntoExplicit::into_implicit(c.num_threads),
-            sub: ::impex::IntoExplicit::into_implicit(c.sub),
+            num_cores: ::impex::IntoImpex::into_implicit(c.num_cores),
+            num_threads: ::impex::IntoImpex::into_implicit(c.num_threads),
+            sub: ::impex::IntoImpex::into_implicit(c.sub),
         }
     }
 }
 
-impl ::impex::IntoExplicit for SubConfig {
+impl ::impex::IntoImpex for SubConfig {
     type Explicit = ExplicitSubConfig;
 
     fn into_implicit(self) -> Self::Explicit {
         Self::Explicit {
-            foo: ::impex::IntoExplicit::into_implicit(self.foo),
-            bar: ::impex::IntoExplicit::into_implicit(self.bar),
+            foo: ::impex::IntoImpex::into_implicit(self.foo),
+            bar: ::impex::IntoImpex::into_implicit(self.bar),
         }
     }
 }
-impl ::impex::Explicit for ExplicitSubConfig {
+impl ::impex::Impex for ExplicitSubConfig {
     type Value = SubConfig;
 
     fn is_explicit(&self) -> bool {
-        ::impex::Explicit::is_explicit(&self.foo) || ::impex::Explicit::is_explicit(&self.bar)
+        ::impex::Impex::is_explicit(&self.foo) || ::impex::Impex::is_explicit(&self.bar)
     }
 
     fn into_value(self) -> Self::Value {
         Self::Value {
-            foo: ::impex::Explicit::into_value(self.bar),
-            bar: ::impex::Explicit::into_value(self.foo),
+            foo: ::impex::Impex::into_value(self.bar),
+            bar: ::impex::Impex::into_value(self.foo),
         }
     }
 }
@@ -122,9 +122,9 @@ impl ::impex::Explicit for ExplicitSubConfig {
 #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 struct ExplicitSubConfig {
-    #[serde(skip_serializing_if = "::impex::Explicit::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
     foo: ::impex::MaybeExplicit<String>,
-    #[serde(skip_serializing_if = "::impex::Explicit::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
     bar: ::impex::MaybeExplicit<String>,
 }
 
@@ -132,8 +132,8 @@ impl Default for ExplicitSubConfig {
     fn default() -> Self {
         let c = SubConfig::default();
         Self {
-            foo: ::impex::IntoExplicit::into_implicit(c.foo),
-            bar: ::impex::IntoExplicit::into_implicit(c.bar),
+            foo: ::impex::IntoImpex::into_implicit(c.foo),
+            bar: ::impex::IntoImpex::into_implicit(c.bar),
         }
     }
 }
