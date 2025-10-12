@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub struct MaybeExplicit<T> {
     value: T,
     is_explicit: bool,
@@ -14,10 +14,6 @@ impl<T> MaybeExplicit<T> {
 
     pub fn set(&mut self, v: T) {
         *self.make_defined() = v;
-    }
-
-    pub fn into_value(self) -> T {
-        self.value
     }
 }
 
@@ -62,21 +58,24 @@ impl<T: Default> Default for MaybeExplicit<T> {
 }
 
 pub trait IntoExplicit {
-    type Value: Explicit;
-    fn into_implicit(self) -> Self::Value;
+    type Explicit: Explicit;
+    fn into_implicit(self) -> Self::Explicit;
 }
 
 pub trait Explicit {
+    type Value;
+
     fn is_explicit(&self) -> bool;
     fn is_implicit(&self) -> bool {
         !self.is_explicit()
     }
+    fn into_value(self) -> Self::Value;
 }
 
 impl IntoExplicit for u32 {
-    type Value = MaybeExplicit<Self>;
+    type Explicit = MaybeExplicit<Self>;
 
-    fn into_implicit(self) -> Self::Value {
+    fn into_implicit(self) -> Self::Explicit {
         MaybeExplicit {
             value: self,
             is_explicit: false,
@@ -85,14 +84,20 @@ impl IntoExplicit for u32 {
 }
 
 impl Explicit for MaybeExplicit<u32> {
+    type Value = u32;
+
     fn is_explicit(&self) -> bool {
         self.is_explicit
     }
+
+    fn into_value(self) -> Self::Value {
+        self.value
+    }
 }
 impl IntoExplicit for String {
-    type Value = MaybeExplicit<Self>;
+    type Explicit = MaybeExplicit<Self>;
 
-    fn into_implicit(self) -> Self::Value {
+    fn into_implicit(self) -> Self::Explicit {
         MaybeExplicit {
             value: self,
             is_explicit: false,
@@ -100,7 +105,13 @@ impl IntoExplicit for String {
     }
 }
 impl Explicit for MaybeExplicit<String> {
+    type Value = String;
+
     fn is_explicit(&self) -> bool {
         self.is_explicit
+    }
+
+    fn into_value(self) -> Self::Value {
+        self.value
     }
 }
