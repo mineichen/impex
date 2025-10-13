@@ -1,17 +1,17 @@
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-pub struct MaybeExplicit<T> {
+pub struct ImpexPrimitiveValue<T> {
     value: T,
     is_explicit: bool,
 }
 
-impl<T> MaybeExplicit<T> {
+impl<T> ImpexPrimitiveValue<T> {
     pub fn make_defined(&mut self) -> &mut T {
         self.is_explicit = true;
         &mut self.value
     }
 }
 
-impl<T> std::ops::Deref for MaybeExplicit<T> {
+impl<T> std::ops::Deref for ImpexPrimitiveValue<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -19,7 +19,7 @@ impl<T> std::ops::Deref for MaybeExplicit<T> {
     }
 }
 #[cfg(feature = "serde")]
-impl<T: serde::Serialize> serde::Serialize for MaybeExplicit<T> {
+impl<T: serde::Serialize> serde::Serialize for ImpexPrimitiveValue<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -33,19 +33,19 @@ impl<T: serde::Serialize> serde::Serialize for MaybeExplicit<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for MaybeExplicit<T> {
+impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for ImpexPrimitiveValue<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        T::deserialize(deserializer).map(|value| MaybeExplicit {
+        T::deserialize(deserializer).map(|value| ImpexPrimitiveValue {
             value,
             is_explicit: true,
         })
     }
 }
 
-impl<T: Default> Default for MaybeExplicit<T> {
+impl<T: Default> Default for ImpexPrimitiveValue<T> {
     fn default() -> Self {
         Self {
             value: Default::default(),
@@ -55,13 +55,13 @@ impl<T: Default> Default for MaybeExplicit<T> {
 }
 
 pub trait IntoImpex: Sized {
-    type Explicit: Impex;
+    type Impex: Impex;
 
-    fn into_impex(self, is_explicit: bool) -> Self::Explicit;
-    fn into_implicit(self) -> Self::Explicit {
+    fn into_impex(self, is_explicit: bool) -> Self::Impex;
+    fn into_implicit(self) -> Self::Impex {
         self.into_impex(false)
     }
-    fn into_explicit(self) -> Self::Explicit {
+    fn into_explicit(self) -> Self::Impex {
         self.into_impex(true)
     }
 }
@@ -78,17 +78,17 @@ pub trait Impex {
 }
 
 impl<T: ImpexPrimitive> IntoImpex for T {
-    type Explicit = MaybeExplicit<Self>;
+    type Impex = ImpexPrimitiveValue<Self>;
 
-    fn into_impex(self, is_explicit: bool) -> Self::Explicit {
-        MaybeExplicit {
+    fn into_impex(self, is_explicit: bool) -> Self::Impex {
+        ImpexPrimitiveValue {
             value: self,
             is_explicit,
         }
     }
 }
 
-impl<T: ImpexPrimitive> Impex for MaybeExplicit<T> {
+impl<T: ImpexPrimitive> Impex for ImpexPrimitiveValue<T> {
     type Value = T;
 
     fn is_explicit(&self) -> bool {
