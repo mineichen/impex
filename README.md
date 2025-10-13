@@ -13,4 +13,5 @@ Thank you for all the inputs during the impl day at EuroRust in Paris. Feel welc
 
 ## Pending features (Possible contributions)
 - Allow replacing the Wrapper for primitives, so it can contain more Metadata per field, or make the Value reactive (e.g. Leptos)
-- Add `set` to the `Impex` trait to allow setting values (and making it explicit)
+- Add support for all Structures (PlainEnums, TupleEnums, UnitEnums, PlainStruct, TupleStruct, UnitStruct)
+- Write macros

@@ -54,9 +54,16 @@ impl<T: Default> Default for MaybeExplicit<T> {
     }
 }
 
-pub trait IntoImpex {
+pub trait IntoImpex: Sized {
     type Explicit: Impex;
-    fn into_implicit(self) -> Self::Explicit;
+
+    fn into_impex(self, is_explicit: bool) -> Self::Explicit;
+    fn into_implicit(self) -> Self::Explicit {
+        self.into_impex(false)
+    }
+    fn into_explicit(self) -> Self::Explicit {
+        self.into_impex(true)
+    }
 }
 
 pub trait Impex {
@@ -70,19 +77,19 @@ pub trait Impex {
     fn set(&mut self, v: Self::Value);
 }
 
-impl IntoImpex for u32 {
+impl<T: ImpexPrimitive> IntoImpex for T {
     type Explicit = MaybeExplicit<Self>;
 
-    fn into_implicit(self) -> Self::Explicit {
+    fn into_impex(self, is_explicit: bool) -> Self::Explicit {
         MaybeExplicit {
             value: self,
-            is_explicit: false,
+            is_explicit,
         }
     }
 }
 
-impl Impex for MaybeExplicit<u32> {
-    type Value = u32;
+impl<T: ImpexPrimitive> Impex for MaybeExplicit<T> {
+    type Value = T;
 
     fn is_explicit(&self) -> bool {
         self.is_explicit
@@ -95,27 +102,8 @@ impl Impex for MaybeExplicit<u32> {
         *self.make_defined() = v;
     }
 }
-impl IntoImpex for String {
-    type Explicit = MaybeExplicit<Self>;
 
-    fn into_implicit(self) -> Self::Explicit {
-        MaybeExplicit {
-            value: self,
-            is_explicit: false,
-        }
-    }
-}
-impl Impex for MaybeExplicit<String> {
-    type Value = String;
-
-    fn is_explicit(&self) -> bool {
-        self.is_explicit
-    }
-
-    fn into_value(self) -> Self::Value {
-        self.value
-    }
-    fn set(&mut self, v: Self::Value) {
-        *self.make_defined() = v;
-    }
-}
+pub trait ImpexPrimitive: Sized {}
+impl ImpexPrimitive for String {}
+impl ImpexPrimitive for u32 {}
+impl ImpexPrimitive for i32 {}
