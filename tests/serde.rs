@@ -83,6 +83,12 @@ impl ::impex::Impex for ExplicitConfig {
             sub: ::impex::Impex::into_value(self.sub),
         }
     }
+
+    fn set(&mut self, v: Self::Value) {
+        ::impex::Impex::set(&mut self.num_cores, v.num_cores);
+        ::impex::Impex::set(&mut self.num_threads, v.num_threads);
+        ::impex::Impex::set(&mut self.sub, v.sub);
+    }
 }
 
 #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -129,6 +135,11 @@ impl ::impex::Impex for ExplicitSubConfig {
             foo: ::impex::Impex::into_value(self.bar),
             bar: ::impex::Impex::into_value(self.foo),
         }
+    }
+
+    fn set(&mut self, v: Self::Value) {
+        ::impex::Impex::set(&mut self.foo, v.foo);
+        ::impex::Impex::set(&mut self.bar, v.bar);
     }
 }
 

@@ -9,10 +9,6 @@ impl<T> MaybeExplicit<T> {
         self.is_explicit = true;
         &mut self.value
     }
-
-    pub fn set(&mut self, v: T) {
-        *self.make_defined() = v;
-    }
 }
 
 impl<T> std::ops::Deref for MaybeExplicit<T> {
@@ -71,6 +67,7 @@ pub trait Impex {
         !self.is_explicit()
     }
     fn into_value(self) -> Self::Value;
+    fn set(&mut self, v: Self::Value);
 }
 
 impl IntoImpex for u32 {
@@ -94,6 +91,9 @@ impl Impex for MaybeExplicit<u32> {
     fn into_value(self) -> Self::Value {
         self.value
     }
+    fn set(&mut self, v: Self::Value) {
+        *self.make_defined() = v;
+    }
 }
 impl IntoImpex for String {
     type Explicit = MaybeExplicit<Self>;
@@ -114,5 +114,8 @@ impl Impex for MaybeExplicit<String> {
 
     fn into_value(self) -> Self::Value {
         self.value
+    }
+    fn set(&mut self, v: Self::Value) {
+        *self.make_defined() = v;
     }
 }
