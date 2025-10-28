@@ -5,7 +5,7 @@ pub struct ImpexPrimitiveValue<T> {
 }
 
 impl<T> ImpexPrimitiveValue<T> {
-    pub fn make_defined(&mut self) -> &mut T {
+    pub fn make_explicit(&mut self) -> &mut T {
         self.is_explicit = true;
         &mut self.value
     }
@@ -74,7 +74,14 @@ pub trait Impex {
         !self.is_explicit()
     }
     fn into_value(self) -> Self::Value;
-    fn set(&mut self, v: Self::Value);
+    /// Sets all values explicitly
+    fn set_impex(&mut self, v: Self::Value, is_explicit: bool);
+    fn set_explicit(&mut self, v: Self::Value) {
+        self.set_impex(v, true);
+    }
+    fn set_implicit(&mut self, v: Self::Value) {
+        self.set_impex(v, true);
+    }
 }
 
 impl<T: ImpexPrimitive> IntoImpex for T {
@@ -98,8 +105,9 @@ impl<T: ImpexPrimitive> Impex for ImpexPrimitiveValue<T> {
     fn into_value(self) -> Self::Value {
         self.value
     }
-    fn set(&mut self, v: Self::Value) {
-        *self.make_defined() = v;
+    fn set_impex(&mut self, v: Self::Value, is_explicit: bool) {
+        self.is_explicit = is_explicit;
+        self.value = v;
     }
 }
 
