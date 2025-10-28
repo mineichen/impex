@@ -1,17 +1,22 @@
+use std::{fmt::Debug, marker::PhantomData};
+
+//use serde::de::DeserializeOwned;
+
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-pub struct ImpexPrimitiveValue<T> {
+pub struct ImpexPrimitiveValue<T, TW> {
     value: T,
     is_explicit: bool,
+    wrapper: PhantomData<TW>,
 }
 
-impl<T> ImpexPrimitiveValue<T> {
+impl<T, TW> ImpexPrimitiveValue<T, TW> {
     pub fn make_explicit(&mut self) -> &mut T {
         self.is_explicit = true;
         &mut self.value
     }
 }
 
-impl<T> std::ops::Deref for ImpexPrimitiveValue<T> {
+impl<T, TW> std::ops::Deref for ImpexPrimitiveValue<T, TW> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -19,7 +24,7 @@ impl<T> std::ops::Deref for ImpexPrimitiveValue<T> {
     }
 }
 #[cfg(feature = "serde")]
-impl<T: serde::Serialize> serde::Serialize for ImpexPrimitiveValue<T> {
+impl<T: serde::Serialize, TW: WrapperSettings> serde::Serialize for ImpexPrimitiveValue<T, TW> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -33,7 +38,9 @@ impl<T: serde::Serialize> serde::Serialize for ImpexPrimitiveValue<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for ImpexPrimitiveValue<T> {
+impl<'de, T: serde::de::DeserializeOwned, TW: WrapperSettings> serde::Deserialize<'de>
+    for ImpexPrimitiveValue<T, TW>
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -41,21 +48,73 @@ impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for ImpexPrimi
         T::deserialize(deserializer).map(|value| ImpexPrimitiveValue {
             value,
             is_explicit: true,
+            wrapper: PhantomData,
         })
     }
 }
 
-impl<T: Default> Default for ImpexPrimitiveValue<T> {
+impl<T: Default, TW> Default for ImpexPrimitiveValue<T, TW> {
     fn default() -> Self {
         Self {
             value: Default::default(),
             is_explicit: false,
+            wrapper: PhantomData,
         }
     }
 }
 
-pub trait IntoImpex: Sized {
-    type Impex: Impex;
+pub trait WrapperSettings: Sized + Default {
+    type PrimitiveWrapper<T: ImpexPrimitive>: Impex<Self, Value = T>
+        + serde::de::DeserializeOwned
+        + PartialEq
+        + Eq
+        + serde::Serialize
+        + Debug
+        + Default;
+    fn create_primitive<T: ImpexPrimitive>(
+        value: T,
+        is_explicit: bool,
+    ) -> Self::PrimitiveWrapper<T>;
+}
+#[derive(PartialEq, Eq, Debug, Default)]
+pub struct DefaultWrapperSettings;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Deserialize<'de> for DefaultWrapperSettings {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self)
+    }
+}
+
+impl serde::Serialize for DefaultWrapperSettings {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_none()
+    }
+}
+
+impl WrapperSettings for DefaultWrapperSettings {
+    type PrimitiveWrapper<T: ImpexPrimitive> = ImpexPrimitiveValue<T, Self>;
+
+    fn create_primitive<T: ImpexPrimitive>(
+        value: T,
+        is_explicit: bool,
+    ) -> Self::PrimitiveWrapper<T> {
+        ImpexPrimitiveValue {
+            value,
+            is_explicit,
+            wrapper: PhantomData,
+        }
+    }
+}
+
+pub trait IntoImpex<TW: WrapperSettings /* = DefaultWrapperSettings*/>: Sized {
+    type Impex: Impex<TW, Value = Self>;
 
     fn into_impex(self, is_explicit: bool) -> Self::Impex;
     fn into_implicit(self) -> Self::Impex {
@@ -66,8 +125,8 @@ pub trait IntoImpex: Sized {
     }
 }
 
-pub trait Impex {
-    type Value;
+pub trait Impex<TW: WrapperSettings /* = DefaultWrapperSettings*/> {
+    type Value: IntoImpex<TW>;
 
     fn is_explicit(&self) -> bool;
     fn is_implicit(&self) -> bool {
@@ -84,18 +143,15 @@ pub trait Impex {
     }
 }
 
-impl<T: ImpexPrimitive> IntoImpex for T {
-    type Impex = ImpexPrimitiveValue<Self>;
+impl<T: ImpexPrimitive, TW: WrapperSettings> IntoImpex<TW> for T {
+    type Impex = TW::PrimitiveWrapper<Self>;
 
     fn into_impex(self, is_explicit: bool) -> Self::Impex {
-        ImpexPrimitiveValue {
-            value: self,
-            is_explicit,
-        }
+        TW::create_primitive(self, is_explicit)
     }
 }
 
-impl<T: ImpexPrimitive> Impex for ImpexPrimitiveValue<T> {
+impl<T: ImpexPrimitive, TW: WrapperSettings> Impex<TW> for ImpexPrimitiveValue<T, TW> {
     type Value = T;
 
     fn is_explicit(&self) -> bool {
@@ -111,7 +167,10 @@ impl<T: ImpexPrimitive> Impex for ImpexPrimitiveValue<T> {
     }
 }
 
-pub trait ImpexPrimitive: Sized {}
+pub trait ImpexPrimitive:
+    Sized + serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default
+{
+}
 impl ImpexPrimitive for String {}
 impl ImpexPrimitive for u32 {}
 impl ImpexPrimitive for i32 {}
