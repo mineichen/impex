@@ -107,3 +107,4 @@ pub trait ImpexPrimitive: Sized {}
 impl ImpexPrimitive for String {}
 impl ImpexPrimitive for u32 {}
 impl ImpexPrimitive for i32 {}
+impl ImpexPrimitive for i64 {}
