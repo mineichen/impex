@@ -1,4 +1,4 @@
 [workspace]
-members = ["impex"]
-resolver = "2"
+members = ["impex", "impex_derive"]
+resolver = "3"
 

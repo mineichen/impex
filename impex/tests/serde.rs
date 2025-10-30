@@ -1,6 +1,13 @@
+#[allow(unused)]
+mod generated_struct;
+#[allow(unused)]
 mod manual_struct;
 
-use crate::manual_struct::{
+// Switch between manual and generated implementations:
+// use crate::manual_struct::{
+//     EnumConfig, ImpexEnumConfig, ImpexKeyStructConfig, ImpexTupleStructConfig, TupleStructConfig,
+// };
+use crate::generated_struct::{
     EnumConfig, ImpexEnumConfig, ImpexKeyStructConfig, ImpexTupleStructConfig, TupleStructConfig,
 };
 
@@ -81,7 +88,6 @@ fn test_serialize_field_enum_skips_implicit_fields() {
 }
 #[test]
 fn tuple_struct() {
-    use impex::Impex;
     let text = r#"[42, 84]"#;
     let tuple_struct: ImpexTupleStructConfig<::impex::DefaultWrapperSettings> =
         serde_json::from_str(text).unwrap();

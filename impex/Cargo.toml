@@ -5,8 +5,10 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1", optional = true }
+impex_derive = { path = "../impex_derive", optional = true }
 
 [features]
+default = ["dep:impex_derive"]
 serde = ["dep:serde"]
 
 [dev-dependencies]

@@ -4,6 +4,9 @@ mod primitive;
 
 pub use primitive::*;
 
+#[cfg(feature = "serde")]
+pub use impex_derive::Impex;
+
 pub trait WrapperSettings: Sized + Default {
     type PrimitiveWrapper<T: ImpexPrimitive>: Impex<Self, Value = T>
         + serde::de::DeserializeOwned

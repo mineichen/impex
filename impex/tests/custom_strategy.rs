@@ -1,3 +1,6 @@
+#[allow(unused)]
+mod generated_struct;
+#[allow(unused)]
 mod manual_struct;
 
 use std::num::NonZeroU8;
@@ -6,7 +9,9 @@ use std::num::NonZeroU8;
 use impex::WrapperSettings;
 use impex::{Impex, ImpexPrimitive};
 
-use crate::manual_struct::ImpexKeyStructConfig;
+// Switch between manual and generated implementations:
+use crate::generated_struct::ImpexKeyStructConfig;
+//use crate::manual_struct::ImpexKeyStructConfig;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 pub struct MyPrimitiveValue<T> {
