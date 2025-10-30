@@ -7,15 +7,16 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
+    let vis = &input.vis;
     let impex_name = Ident::new(&format!("{}Impex", name), name.span());
 
     let expanded = match &input.data {
         Data::Struct(data_struct) => match &data_struct.fields {
-            Fields::Named(fields) => generate_named_struct(&impex_name, name, fields),
-            Fields::Unnamed(fields) => generate_tuple_struct(&impex_name, name, fields),
+            Fields::Named(fields) => generate_named_struct(&impex_name, name, vis, fields),
+            Fields::Unnamed(fields) => generate_tuple_struct(&impex_name, name, vis, fields),
             Fields::Unit => panic!("Unit structs are not supported"),
         },
-        Data::Enum(data_enum) => generate_enum(&impex_name, name, data_enum),
+        Data::Enum(data_enum) => generate_enum(&impex_name, name, vis, data_enum),
         Data::Union(_) => panic!("Unions are not supported"),
     };
 
@@ -25,6 +26,7 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
 fn generate_named_struct(
     impex_name: &Ident,
     original_name: &Ident,
+    vis: &syn::Visibility,
     fields: &syn::FieldsNamed,
 ) -> proc_macro2::TokenStream {
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
@@ -33,9 +35,10 @@ fn generate_named_struct(
     let impex_fields = fields.named.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
+        let field_vis = &f.vis;
         quote! {
             #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-            pub #name: <#ty as ::impex::IntoImpex<TW>>::Impex
+            #field_vis #name: <#ty as ::impex::IntoImpex<TW>>::Impex
         }
     });
 
@@ -46,19 +49,15 @@ fn generate_named_struct(
         }
     });
 
-    // Generate is_explicit check (all fields OR'd together, excluding last field for structs)
-    let is_explicit_checks = field_names
-        .iter()
-        .take(field_names.len().saturating_sub(1))
-        .map(|name| {
-            quote! {
-                ::impex::Impex::<TW>::is_explicit(&self.#name)
-            }
+    // Generate is_explicit check (all fields OR'd together)
+    let mut field_iter = field_names.iter();
+    let is_explicit_body = if let Some(first) = field_iter.next() {
+        let first_check = quote! { ::impex::Impex::<TW>::is_explicit(&self.#first) };
+        let rest_checks = field_iter.map(|name| {
+            quote! { || ::impex::Impex::<TW>::is_explicit(&self.#name) }
         });
-
-    let is_explicit_body = if is_explicit_checks.len() > 0 {
         quote! {
-            #(#is_explicit_checks)||*
+            #first_check #(#rest_checks)*
         }
     } else {
         quote! { false }
@@ -71,15 +70,12 @@ fn generate_named_struct(
         }
     });
 
-    // Generate set_impex implementation (excluding last field)
-    let set_impex_fields = field_names
-        .iter()
-        .take(field_names.len().saturating_sub(1))
-        .map(|name| {
-            quote! {
-                ::impex::Impex::<TW>::set_impex(&mut self.#name, v.#name, is_explicit);
-            }
-        });
+    // Generate set_impex implementation (all fields)
+    let set_impex_fields = field_names.iter().map(|name| {
+        quote! {
+            ::impex::Impex::<TW>::set_impex(&mut self.#name, v.#name, is_explicit);
+        }
+    });
 
     // Generate default implementation
     let default_fields = field_names.iter().map(|name| {
@@ -91,7 +87,7 @@ fn generate_named_struct(
     quote! {
         #[derive(serde::Deserialize, serde::Serialize)]
         #[serde(default)]
-        pub struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
+        #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_fields),*
         }
 
@@ -137,15 +133,17 @@ fn generate_named_struct(
 fn generate_tuple_struct(
     impex_name: &Ident,
     original_name: &Ident,
+    vis: &syn::Visibility,
     fields: &syn::FieldsUnnamed,
 ) -> proc_macro2::TokenStream {
     let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
+    let field_vis: Vec<_> = fields.unnamed.iter().map(|f| &f.vis).collect();
     let field_indices: Vec<Index> = (0..fields.unnamed.len()).map(Index::from).collect();
 
     // Generate the Impex struct definition
-    let impex_fields = field_types.iter().map(|ty| {
+    let impex_fields = field_types.iter().zip(field_vis.iter()).map(|(ty, vis)| {
         quote! {
-            pub <#ty as ::impex::IntoImpex<TW>>::Impex
+            #vis <#ty as ::impex::IntoImpex<TW>>::Impex
         }
     });
 
@@ -157,11 +155,18 @@ fn generate_tuple_struct(
     });
 
     // Generate is_explicit check (all fields OR'd together)
-    let is_explicit_checks = field_indices.iter().map(|idx| {
+    let mut idx_iter = field_indices.iter();
+    let is_explicit_body = if let Some(first) = idx_iter.next() {
+        let first_check = quote! { ::impex::Impex::<TW>::is_explicit(&self.#first) };
+        let rest_checks = idx_iter.map(|idx| {
+            quote! { || ::impex::Impex::<TW>::is_explicit(&self.#idx) }
+        });
         quote! {
-            ::impex::Impex::<TW>::is_explicit(&self.#idx)
+            #first_check #(#rest_checks)*
         }
-    });
+    } else {
+        quote! { false }
+    };
 
     // Generate into_value implementation
     let into_value_fields = field_indices.iter().map(|idx| {
@@ -186,7 +191,7 @@ fn generate_tuple_struct(
 
     quote! {
         #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
-        pub struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
+        #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
             #(#impex_fields),*
         );
 
@@ -204,7 +209,7 @@ fn generate_tuple_struct(
             type Value = #original_name;
 
             fn is_explicit(&self) -> bool {
-                #(#is_explicit_checks)||*
+                #is_explicit_body
             }
 
             fn into_value(self) -> Self::Value {
@@ -232,6 +237,7 @@ fn generate_tuple_struct(
 fn generate_enum(
     impex_name: &Ident,
     original_name: &Ident,
+    vis: &syn::Visibility,
     data_enum: &syn::DataEnum,
 ) -> proc_macro2::TokenStream {
     // Generate enum variants
@@ -461,7 +467,7 @@ fn generate_enum(
 
     quote! {
         #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-        pub enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
+        #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_variants),*
         }
 

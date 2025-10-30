@@ -33,7 +33,7 @@ impl Default for EnumConfig {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
-pub struct TupleStructConfig(i32, i64);
+pub struct TupleStructConfig(pub i32, pub i64);
 
 impl Default for TupleStructConfig {
     fn default() -> Self {

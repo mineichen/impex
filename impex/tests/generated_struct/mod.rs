@@ -36,7 +36,7 @@ impl Default for EnumConfig {
 }
 
 #[derive(Debug, PartialEq, impex::Impex)]
-pub struct TupleStructConfig(i32, i64);
+pub struct TupleStructConfig(pub i32, pub i64);
 
 impl Default for TupleStructConfig {
     fn default() -> Self {
