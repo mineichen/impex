@@ -1,10 +1,10 @@
+#![doc = include_str!("../README.md")]
 use std::fmt::Debug;
 
 mod primitive;
 
 pub use primitive::*;
 
-#[cfg(feature = "serde")]
 pub use impex_derive::Impex;
 
 pub trait WrapperSettings: Sized + Default {
@@ -23,7 +23,6 @@ pub trait WrapperSettings: Sized + Default {
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct DefaultWrapperSettings;
 
-#[cfg(feature = "serde")]
 impl<'de> serde::de::Deserialize<'de> for DefaultWrapperSettings {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where

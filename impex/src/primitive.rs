@@ -44,7 +44,6 @@ impl<T> std::ops::Deref for ImpexPrimitiveValue<T> {
     }
 }
 
-#[cfg(feature = "serde")]
 impl<T: serde::Serialize> serde::Serialize for ImpexPrimitiveValue<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -58,7 +57,6 @@ impl<T: serde::Serialize> serde::Serialize for ImpexPrimitiveValue<T> {
     }
 }
 
-#[cfg(feature = "serde")]
 impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for ImpexPrimitiveValue<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

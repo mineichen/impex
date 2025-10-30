@@ -91,7 +91,7 @@ fn generate_named_struct(
     quote! {
         #[derive(serde::Deserialize, serde::Serialize)]
         #[serde(default)]
-        pub struct #impex_name<TW: ::impex::WrapperSettings> {
+        pub struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_fields),*
         }
 
@@ -186,7 +186,7 @@ fn generate_tuple_struct(
 
     quote! {
         #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
-        pub struct #impex_name<TW: ::impex::WrapperSettings>(
+        pub struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
             #(#impex_fields),*
         );
 
@@ -461,7 +461,7 @@ fn generate_enum(
 
     quote! {
         #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-        pub enum #impex_name<TW: ::impex::WrapperSettings> {
+        pub enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_variants),*
         }
 

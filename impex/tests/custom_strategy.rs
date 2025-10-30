@@ -1,16 +1,15 @@
+use std::num::NonZeroU8;
+
+use impex::{Impex, ImpexPrimitive, WrapperSettings};
+
+use crate::generated_struct::ImpexKeyStructConfig;
+
 #[allow(unused)]
 mod generated_struct;
 #[allow(unused)]
 mod manual_struct;
 
-use std::num::NonZeroU8;
-
-#[cfg(feature = "serde")]
-use impex::WrapperSettings;
-use impex::{Impex, ImpexPrimitive};
-
 // Switch between manual and generated implementations:
-use crate::generated_struct::ImpexKeyStructConfig;
 //use crate::manual_struct::ImpexKeyStructConfig;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
@@ -42,7 +41,6 @@ impl<T> std::ops::Deref for MyPrimitiveValue<T> {
     }
 }
 
-#[cfg(feature = "serde")]
 impl<T: serde::Serialize> serde::Serialize for MyPrimitiveValue<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -56,7 +54,6 @@ impl<T: serde::Serialize> serde::Serialize for MyPrimitiveValue<T> {
     }
 }
 
-#[cfg(feature = "serde")]
 impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for MyPrimitiveValue<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -89,7 +86,6 @@ impl<T: ImpexPrimitive, TW: WrapperSettings> Impex<TW> for MyPrimitiveValue<T> {
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct MyWrapperSettings;
 
-#[cfg(feature = "serde")]
 impl<'de> serde::de::Deserialize<'de> for MyWrapperSettings {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
