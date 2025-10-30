@@ -1,8 +1,6 @@
 use std::fmt::Debug;
 
 use crate::Impex;
-#[cfg(feature = "serde")]
-use crate::WrapperSettings;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 pub struct ImpexPrimitiveValue<T> {
@@ -73,7 +71,7 @@ impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for ImpexPrimi
     }
 }
 
-impl<T: ImpexPrimitive, TW: WrapperSettings> Impex<TW> for ImpexPrimitiveValue<T> {
+impl<T: ImpexPrimitive, TW> Impex<TW> for ImpexPrimitiveValue<T> {
     type Value = T;
 
     fn is_explicit(&self) -> bool {

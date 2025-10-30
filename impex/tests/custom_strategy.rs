@@ -8,7 +8,7 @@ use impex::{Impex, ImpexPrimitive};
 
 use crate::manual_struct::ImpexKeyStructConfig;
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 pub struct MyPrimitiveValue<T> {
     is_explicit: bool,
     variable_name: Option<(NonZeroU8, [u8; 30])>,
@@ -62,16 +62,6 @@ impl<'de, T: serde::de::DeserializeOwned> serde::Deserialize<'de> for MyPrimitiv
             is_explicit: true,
             variable_name: None,
         })
-    }
-}
-
-impl<T: Default> Default for MyPrimitiveValue<T> {
-    fn default() -> Self {
-        Self {
-            value: Default::default(),
-            is_explicit: false,
-            variable_name: None,
-        }
     }
 }
 

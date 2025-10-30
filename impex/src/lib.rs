@@ -62,8 +62,8 @@ pub trait IntoImpex<TW: WrapperSettings /* = DefaultWrapperSettings*/>: Sized {
     }
 }
 
-pub trait Impex<TW: WrapperSettings /* = DefaultWrapperSettings*/> {
-    type Value: IntoImpex<TW>;
+pub trait Impex<TW /* = DefaultWrapperSettings*/> {
+    type Value;
 
     fn is_explicit(&self) -> bool;
     fn is_implicit(&self) -> bool {
