@@ -7,7 +7,7 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
-    let impex_name = Ident::new(&format!("Impex{}", name), name.span());
+    let impex_name = Ident::new(&format!("{}Impex", name), name.span());
 
     let expanded = match &input.data {
         Data::Struct(data_struct) => match &data_struct.fields {

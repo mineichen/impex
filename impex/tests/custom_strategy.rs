@@ -2,15 +2,14 @@ use std::num::NonZeroU8;
 
 use impex::{Impex, ImpexPrimitive, WrapperSettings};
 
-use crate::generated_struct::ImpexKeyStructConfig;
+use crate::generated_struct::KeyStructConfigImpex;
+// Switch between manual and generated implementations:
+//use crate::manual_struct::KeyStructConfigImpex;
 
 #[allow(unused)]
 mod generated_struct;
 #[allow(unused)]
 mod manual_struct;
-
-// Switch between manual and generated implementations:
-//use crate::manual_struct::ImpexKeyStructConfig;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 pub struct MyPrimitiveValue<T> {
@@ -122,7 +121,7 @@ impl WrapperSettings for MyWrapperSettings {
 #[test]
 fn custom_strategy() {
     let text = r#"{"num_cores":43}"#;
-    let config: ImpexKeyStructConfig<MyWrapperSettings> = serde_json::from_str(text).unwrap();
+    let config: KeyStructConfigImpex<MyWrapperSettings> = serde_json::from_str(text).unwrap();
     assert!(config.num_cores.variable_name.is_none());
     assert!(config.num_cores.is_explicit());
     assert_eq!(*config.num_cores, 43);

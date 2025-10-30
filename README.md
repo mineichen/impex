@@ -11,7 +11,7 @@ pub struct MyStruct {
 }
 
 let input = r#"{"foo":42}"#;
-let value: ImpexMyStruct = serde_json::from_str(input).unwrap();
+let value: MyStructImpex = serde_json::from_str(input).unwrap();
 let output = serde_json::to_string(&value).unwrap();
 
 assert_eq!(*value.foo, 42);

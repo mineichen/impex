@@ -5,10 +5,10 @@ mod manual_struct;
 
 // Switch between manual and generated implementations:
 // use crate::manual_struct::{
-//     EnumConfig, ImpexEnumConfig, ImpexKeyStructConfig, ImpexTupleStructConfig, TupleStructConfig,
+//     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfigImpex, TupleStructConfig,
 // };
 use crate::generated_struct::{
-    EnumConfig, ImpexEnumConfig, ImpexKeyStructConfig, ImpexTupleStructConfig, TupleStructConfig,
+    EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
 };
 
 #[test]
@@ -18,7 +18,7 @@ fn serialize_with_defaults() {
 
     let text = r#"{"num_cores":3}"#;
     let mut obj =
-        serde_json::from_str::<ImpexKeyStructConfig<::impex::DefaultWrapperSettings>>(text)
+        serde_json::from_str::<KeyStructConfigImpex<::impex::DefaultWrapperSettings>>(text)
             .unwrap();
     assert_eq!(3, *obj.num_cores);
     assert_eq!(42, *obj.num_threads);
@@ -27,7 +27,7 @@ fn serialize_with_defaults() {
     assert_eq!(text, serde_json::to_string(&obj).unwrap().as_str());
 
     match &mut obj.enum_config {
-        ImpexEnumConfig::Bar(_, x, _) => x.set_explicit(43),
+        EnumConfigImpex::Bar(_, x, _) => x.set_explicit(43),
         _ => panic!(),
     }
     let after_set_bar_field_text = serde_json::to_string(&obj).unwrap();
@@ -40,7 +40,7 @@ fn serialize_with_defaults() {
     obj.enum_config
         .set_explicit(EnumConfig::Bar("Custom".into(), 42, Default::default()));
     match &obj.enum_config {
-        ImpexEnumConfig::Bar(x1, x2, x3) => {
+        EnumConfigImpex::Bar(x1, x2, x3) => {
             assert!(x1.is_explicit());
             assert_eq!(x1.as_str(), "Custom");
 
@@ -68,10 +68,10 @@ fn serialize_with_defaults() {
 fn test_serialize_field_enum_skips_implicit_fields() {
     use impex::Impex;
     let text = r#"{"enum_config":{"Foo":{}}}"#;
-    let x: ImpexKeyStructConfig<::impex::DefaultWrapperSettings> =
+    let x: KeyStructConfigImpex<::impex::DefaultWrapperSettings> =
         serde_json::from_str(text).unwrap();
 
-    let ImpexEnumConfig::Foo {
+    let EnumConfigImpex::Foo {
         foo_value,
         tuple_struct_config,
     } = x.enum_config
@@ -89,7 +89,7 @@ fn test_serialize_field_enum_skips_implicit_fields() {
 #[test]
 fn tuple_struct() {
     let text = r#"[42, 84]"#;
-    let tuple_struct: ImpexTupleStructConfig<::impex::DefaultWrapperSettings> =
+    let tuple_struct: TupleStructConfigImpex<::impex::DefaultWrapperSettings> =
         serde_json::from_str(text).unwrap();
     assert!(tuple_struct.0.is_explicit());
 }

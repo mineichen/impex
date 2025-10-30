@@ -47,7 +47,7 @@ impl Default for TupleStructConfig {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-pub struct ImpexKeyStructConfig<TW: ::impex::WrapperSettings> {
+pub struct KeyStructConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
     pub num_cores: <u32 as ::impex::IntoImpex<TW>>::Impex,
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
@@ -59,10 +59,10 @@ pub struct ImpexKeyStructConfig<TW: ::impex::WrapperSettings> {
 }
 
 impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for KeyStructConfig {
-    type Impex = ImpexKeyStructConfig<TW>;
+    type Impex = KeyStructConfigImpex<TW>;
 
     fn into_impex(self, is_expclicit: bool) -> Self::Impex {
-        ImpexKeyStructConfig {
+        KeyStructConfigImpex {
             num_cores: ::impex::IntoImpex::<TW>::into_impex(self.num_cores, is_expclicit),
             num_threads: ::impex::IntoImpex::<TW>::into_impex(self.num_threads, is_expclicit),
             enum_config: ::impex::IntoImpex::<TW>::into_impex(self.enum_config, is_expclicit),
@@ -74,7 +74,7 @@ impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for KeyStructConfig {
     }
 }
 
-impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexKeyStructConfig<TW> {
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for KeyStructConfigImpex<TW> {
     type Value = KeyStructConfig;
     fn is_explicit(&self) -> bool {
         ::impex::Impex::<TW>::is_explicit(&self.num_cores)
@@ -98,7 +98,7 @@ impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexKeyStructConfig<T
     }
 }
 
-impl<TW: ::impex::WrapperSettings> Default for ImpexKeyStructConfig<TW> {
+impl<TW: ::impex::WrapperSettings> Default for KeyStructConfigImpex<TW> {
     fn default() -> Self {
         let x = KeyStructConfig::default();
         Self {
@@ -143,7 +143,7 @@ impl<TW: ::impex::WrapperSettings> Default for ImpexKeyStructConfig<TW> {
 // }
 //
 #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-pub enum ImpexEnumConfig<TW: ::impex::WrapperSettings>
+pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>
 // where
 //     TW::PrimitiveWrapper<String>: Default,
 {
@@ -163,21 +163,21 @@ pub enum ImpexEnumConfig<TW: ::impex::WrapperSettings>
 }
 
 impl<TW: impex::WrapperSettings> ::impex::IntoImpex<TW> for EnumConfig {
-    type Impex = ImpexEnumConfig<TW>;
+    type Impex = EnumConfigImpex<TW>;
 
     fn into_impex(self, is_explicit: bool) -> Self::Impex {
         match self {
             EnumConfig::Foo {
                 foo_value,
                 tuple_struct_config,
-            } => ImpexEnumConfig::Foo {
+            } => EnumConfigImpex::Foo {
                 foo_value: ::impex::IntoImpex::<TW>::into_impex(foo_value, is_explicit),
                 tuple_struct_config: ::impex::IntoImpex::into_impex(
                     tuple_struct_config,
                     is_explicit,
                 ),
             },
-            EnumConfig::Bar(x1, x2, x3) => ImpexEnumConfig::Bar(
+            EnumConfig::Bar(x1, x2, x3) => EnumConfigImpex::Bar(
                 ::impex::IntoImpex::<TW>::into_impex(x1, is_explicit),
                 ::impex::IntoImpex::<TW>::into_impex(x2, is_explicit),
                 ::impex::IntoImpex::<TW>::into_impex(x3, is_explicit),
@@ -186,19 +186,19 @@ impl<TW: impex::WrapperSettings> ::impex::IntoImpex<TW> for EnumConfig {
     }
 }
 
-impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexEnumConfig<TW> {
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for EnumConfigImpex<TW> {
     type Value = EnumConfig;
 
     fn is_explicit(&self) -> bool {
         match &self {
-            ImpexEnumConfig::Foo {
+            EnumConfigImpex::Foo {
                 foo_value,
                 tuple_struct_config,
             } => {
                 ::impex::Impex::<TW>::is_explicit(foo_value)
                     || impex::Impex::is_explicit(tuple_struct_config)
             }
-            ImpexEnumConfig::Bar(x1, x2, x3) => {
+            EnumConfigImpex::Bar(x1, x2, x3) => {
                 ::impex::Impex::<TW>::is_explicit(x1)
                     || ::impex::Impex::<TW>::is_explicit(x2)
                     || ::impex::Impex::<TW>::is_explicit(x3)
@@ -208,14 +208,14 @@ impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexEnumConfig<TW> {
 
     fn into_value(self) -> Self::Value {
         match self {
-            ImpexEnumConfig::Foo {
+            EnumConfigImpex::Foo {
                 foo_value,
                 tuple_struct_config,
             } => EnumConfig::Foo {
                 foo_value: ::impex::Impex::<TW>::into_value(foo_value),
                 tuple_struct_config: ::impex::Impex::into_value(tuple_struct_config),
             },
-            ImpexEnumConfig::Bar(x1, x2, x3) => EnumConfig::Bar(
+            EnumConfigImpex::Bar(x1, x2, x3) => EnumConfig::Bar(
                 ::impex::Impex::<TW>::into_value(x1),
                 ::impex::Impex::<TW>::into_value(x2),
                 ::impex::Impex::<TW>::into_value(x3),
@@ -228,14 +228,14 @@ impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexEnumConfig<TW> {
             Self::Value::Foo {
                 foo_value,
                 tuple_struct_config,
-            } => ImpexEnumConfig::Foo {
+            } => EnumConfigImpex::Foo {
                 foo_value: ::impex::IntoImpex::<TW>::into_impex(foo_value, is_explicit),
                 tuple_struct_config: ::impex::IntoImpex::<TW>::into_impex(
                     tuple_struct_config,
                     is_explicit,
                 ),
             },
-            Self::Value::Bar(x1, x2, x3) => ImpexEnumConfig::Bar(
+            Self::Value::Bar(x1, x2, x3) => EnumConfigImpex::Bar(
                 ::impex::IntoImpex::<TW>::into_impex(x1, is_explicit),
                 ::impex::IntoImpex::<TW>::into_impex(x2, is_explicit),
                 ::impex::IntoImpex::<TW>::into_impex(x3, is_explicit),
@@ -244,7 +244,7 @@ impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexEnumConfig<TW> {
     }
 }
 
-impl<TW: ::impex::WrapperSettings> Default for ImpexEnumConfig<TW> {
+impl<TW: ::impex::WrapperSettings> Default for EnumConfigImpex<TW> {
     fn default() -> Self {
         let c = EnumConfig::default();
         match c {
@@ -265,23 +265,23 @@ impl<TW: ::impex::WrapperSettings> Default for ImpexEnumConfig<TW> {
 }
 
 #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
-pub struct ImpexTupleStructConfig<TW: ::impex::WrapperSettings>(
+pub struct TupleStructConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
     pub <i32 as ::impex::IntoImpex<TW>>::Impex,
     pub <i64 as ::impex::IntoImpex<TW>>::Impex,
 );
 
 impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for TupleStructConfig {
-    type Impex = ImpexTupleStructConfig<TW>;
+    type Impex = TupleStructConfigImpex<TW>;
 
     fn into_impex(self, is_expclicit: bool) -> Self::Impex {
-        ImpexTupleStructConfig(
+        TupleStructConfigImpex(
             ::impex::IntoImpex::<TW>::into_impex(self.0, is_expclicit),
             ::impex::IntoImpex::<TW>::into_impex(self.1, is_expclicit),
         )
     }
 }
 
-impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexTupleStructConfig<TW> {
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for TupleStructConfigImpex<TW> {
     type Value = TupleStructConfig;
     fn is_explicit(&self) -> bool {
         ::impex::Impex::<TW>::is_explicit(&self.0) || ::impex::Impex::<TW>::is_explicit(&self.1)
@@ -300,7 +300,7 @@ impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for ImpexTupleStructConfig
     }
 }
 
-impl<TW: ::impex::WrapperSettings> Default for ImpexTupleStructConfig<TW> {
+impl<TW: ::impex::WrapperSettings> Default for TupleStructConfigImpex<TW> {
     fn default() -> Self {
         let x = TupleStructConfig::default();
         Self(
