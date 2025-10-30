@@ -82,7 +82,7 @@ impl<T: ImpexPrimitive, TW: WrapperSettings> Impex<TW> for MyPrimitiveValue<T> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Default)]
+#[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
 pub struct MyWrapperSettings;
 
 impl<'de> serde::de::Deserialize<'de> for MyWrapperSettings {

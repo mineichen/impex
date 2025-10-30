@@ -7,20 +7,21 @@ pub use primitive::*;
 
 pub use impex_derive::Impex;
 
-pub trait WrapperSettings: Sized + Default {
+pub trait WrapperSettings: Sized + Default + Clone {
     type PrimitiveWrapper<T: ImpexPrimitive>: Impex<Self, Value = T>
         + serde::de::DeserializeOwned
         + PartialEq
         + Eq
         + serde::Serialize
         + Debug
-        + Default;
+        + Default
+        + Clone;
     fn create_primitive<T: ImpexPrimitive>(
         value: T,
         is_explicit: bool,
     ) -> Self::PrimitiveWrapper<T>;
 }
-#[derive(PartialEq, Eq, Debug, Default)]
+#[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
 pub struct DefaultWrapperSettings;
 
 impl<'de> serde::de::Deserialize<'de> for DefaultWrapperSettings {

@@ -39,7 +39,7 @@ impl Default for EnumConfig {
 }
 
 #[derive(Debug, PartialEq, impex::Impex)]
-#[impex(derive(Debug, PartialEq, Eq))]
+#[impex(derive(Debug, PartialEq, Eq, Clone))]
 pub struct TupleStructConfig(pub i32, pub i64);
 
 impl Default for TupleStructConfig {
