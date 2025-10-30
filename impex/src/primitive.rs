@@ -86,7 +86,7 @@ impl<T: ImpexPrimitive, TW> Impex<TW> for ImpexPrimitiveValue<T> {
 }
 
 pub trait ImpexPrimitive:
-    Sized + serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default
+    Sized + serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default + Clone
 {
 }
 
@@ -99,9 +99,9 @@ impl ImpexPrimitive for i64 {}
 /// Wraps a normal value so it can be turned into a impex, even if the type doesn't implement IntoImpex
 /// This should be a field attribute #[impex(primitive)] in the macro
 ///
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, std::fmt::Debug, Default)]
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, std::fmt::Debug, Default, Clone)]
 pub struct PrimitiveWrapper<T>(pub T);
-impl<T: serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default>
+impl<T: serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default + Clone>
     ImpexPrimitive for PrimitiveWrapper<T>
 {
 }
