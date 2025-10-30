@@ -1,34 +1,80 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Ident, Index, parse_macro_input};
+use syn::{
+    Data, DeriveInput, Fields, Ident, Index, Token, parse_macro_input, punctuated::Punctuated,
+};
 
-#[proc_macro_derive(Impex)]
+struct GenerateContext<'a> {
+    impex_name: &'a Ident,
+    original_name: &'a Ident,
+    vis: &'a syn::Visibility,
+    derives: proc_macro2::TokenStream,
+}
+
+#[proc_macro_derive(Impex, attributes(impex))]
 pub fn derive_impex(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
-    let vis = &input.vis;
-    let impex_name = Ident::new(&format!("{}Impex", name), name.span());
+    let ctx = GenerateContext {
+        impex_name: &Ident::new(&format!("{}Impex", name), name.span()),
+        original_name: name,
+        vis: &input.vis,
+        derives: parse_impex_attributes(&input.attrs),
+    };
 
     let expanded = match &input.data {
         Data::Struct(data_struct) => match &data_struct.fields {
-            Fields::Named(fields) => generate_named_struct(&impex_name, name, vis, fields),
-            Fields::Unnamed(fields) => generate_tuple_struct(&impex_name, name, vis, fields),
+            Fields::Named(fields) => generate_named_struct(ctx, fields),
+            Fields::Unnamed(fields) => generate_tuple_struct(ctx, fields),
             Fields::Unit => panic!("Unit structs are not supported"),
         },
-        Data::Enum(data_enum) => generate_enum(&impex_name, name, vis, data_enum),
+        Data::Enum(data_enum) => generate_enum(ctx, data_enum),
         Data::Union(_) => panic!("Unions are not supported"),
     };
 
     TokenStream::from(expanded)
 }
 
+fn parse_impex_attributes(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
+    let extra_derives = attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("impex"))
+        .filter_map(|attr| {
+            let meta = attr.parse_args::<syn::Meta>().ok()?;
+            let tokens = match meta {
+                syn::Meta::List(list) => list.path.is_ident("derive").then_some(list.tokens)?,
+                _ => return None,
+            };
+
+            syn::parse::Parser::parse2(
+                |input: syn::parse::ParseStream| {
+                    Punctuated::<syn::Path, Token![,]>::parse_terminated(input)
+                },
+                tokens,
+            )
+            .ok()
+        })
+        .flat_map(|tokens| {
+            tokens
+                .into_iter()
+                .filter_map(|path| path.get_ident().cloned())
+        });
+
+    quote! { serde::Deserialize, serde::Serialize #(, #extra_derives)* }
+}
+
 fn generate_named_struct(
-    impex_name: &Ident,
-    original_name: &Ident,
-    vis: &syn::Visibility,
+    ctx: GenerateContext,
     fields: &syn::FieldsNamed,
 ) -> proc_macro2::TokenStream {
+    let GenerateContext {
+        impex_name,
+        original_name,
+        vis,
+        derives,
+    } = ctx;
+
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
 
     // Generate the Impex struct definition
@@ -85,7 +131,7 @@ fn generate_named_struct(
     });
 
     quote! {
-        #[derive(serde::Deserialize, serde::Serialize)]
+        #[derive(#derives)]
         #[serde(default)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_fields),*
@@ -131,11 +177,16 @@ fn generate_named_struct(
 }
 
 fn generate_tuple_struct(
-    impex_name: &Ident,
-    original_name: &Ident,
-    vis: &syn::Visibility,
+    ctx: GenerateContext,
     fields: &syn::FieldsUnnamed,
 ) -> proc_macro2::TokenStream {
+    let GenerateContext {
+        impex_name,
+        original_name,
+        vis,
+        derives,
+    } = ctx;
+
     let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
     let field_vis: Vec<_> = fields.unnamed.iter().map(|f| &f.vis).collect();
     let field_indices: Vec<Index> = (0..fields.unnamed.len()).map(Index::from).collect();
@@ -190,7 +241,7 @@ fn generate_tuple_struct(
     });
 
     quote! {
-        #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
+        #[derive(#derives)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
             #(#impex_fields),*
         );
@@ -234,12 +285,14 @@ fn generate_tuple_struct(
     }
 }
 
-fn generate_enum(
-    impex_name: &Ident,
-    original_name: &Ident,
-    vis: &syn::Visibility,
-    data_enum: &syn::DataEnum,
-) -> proc_macro2::TokenStream {
+fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let GenerateContext {
+        impex_name,
+        original_name,
+        vis,
+        derives,
+    } = ctx;
+
     // Generate enum variants
     let impex_variants = data_enum.variants.iter().map(|variant| {
         let variant_name = &variant.ident;
@@ -466,7 +519,7 @@ fn generate_enum(
     });
 
     quote! {
-        #[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+        #[derive(#derives)]
         #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_variants),*
         }

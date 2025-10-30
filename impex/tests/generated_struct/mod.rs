@@ -1,6 +1,9 @@
 // This module uses the #[derive(Impex)] macro to auto-generate
 // the same code that is manually written in manual_struct/mod.rs
 
+// You can add extra derives to the generated Impex type:
+// #[impex(derive(Clone, Debug))]
+
 #[derive(impex::Impex)]
 pub struct KeyStructConfig {
     pub num_cores: u32,
@@ -36,6 +39,7 @@ impl Default for EnumConfig {
 }
 
 #[derive(Debug, PartialEq, impex::Impex)]
+#[impex(derive(Debug, PartialEq, Eq))]
 pub struct TupleStructConfig(pub i32, pub i64);
 
 impl Default for TupleStructConfig {
