@@ -65,6 +65,7 @@ fn serialize_with_defaults() {
 }
 
 #[test]
+#[ignore = "Feature was temporarily removed to allow !Default primitives, will be re-added later"]
 fn test_serialize_field_enum_skips_implicit_fields() {
     use impex::Impex;
     let text = r#"{"enum_config":{"Foo":{}}}"#;

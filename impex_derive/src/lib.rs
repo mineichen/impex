@@ -481,7 +481,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     let ty = &f.ty;
                     quote! {
                         #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-                        #[serde(default)]
+                        //#[serde(default)]
                         #name: <#ty as ::impex::IntoImpex<TW>>::Impex
                     }
                 });

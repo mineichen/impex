@@ -18,7 +18,6 @@ pub trait WrapperSettings: Sized + Default + Clone {
         + serde::de::DeserializeOwned
         + serde::Serialize
         + Debug
-        + Default
         + Clone;
     fn create_primitive<T: ImpexPrimitive>(
         value: T,

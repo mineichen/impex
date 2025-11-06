@@ -167,16 +167,13 @@ where
 // }
 //
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>
-// where
-//     TW::PrimitiveWrapper<String>: Default,
-{
+pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
     Foo {
         #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-        #[serde(default)]
+        //#[serde(default)]
         foo_value: <String as ::impex::IntoImpex<TW>>::Impex,
         #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-        #[serde(default)]
+        //#[serde(default)]
         tuple_struct_config: <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex,
     },
     Bar(
