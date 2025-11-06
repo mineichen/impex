@@ -4,12 +4,12 @@ mod generated_struct;
 mod manual_struct;
 
 // Switch between manual and generated implementations:
-use crate::generated_struct::{
-    EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
-};
-// use crate::manual_struct::{
+// use crate::generated_struct::{
 //     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
 // };
+use crate::manual_struct::{
+    EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
+};
 
 #[test]
 fn serialize_with_defaults() {

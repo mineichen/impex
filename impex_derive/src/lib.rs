@@ -9,6 +9,8 @@ struct GenerateContext<'a> {
     original_name: &'a Ident,
     vis: &'a syn::Visibility,
     derives: proc_macro2::TokenStream,
+    has_partial_eq: bool,
+    has_eq: bool,
 }
 
 #[proc_macro_derive(Impex, attributes(impex))]
@@ -16,11 +18,14 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
+    let (derives, has_partial_eq, has_eq) = parse_impex_attributes(&input.attrs);
     let ctx = GenerateContext {
         impex_name: &Ident::new(&format!("{}Impex", name), name.span()),
         original_name: name,
         vis: &input.vis,
-        derives: parse_impex_attributes(&input.attrs),
+        derives,
+        has_partial_eq,
+        has_eq,
     };
 
     let expanded = match &input.data {
@@ -36,7 +41,10 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn parse_impex_attributes(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
+fn parse_impex_attributes(attrs: &[syn::Attribute]) -> (proc_macro2::TokenStream, bool, bool) {
+    let has_partial_eq = &mut false;
+    let has_eq = &mut false;
+
     let extra_derives = attrs
         .iter()
         .filter(|attr| attr.path().is_ident("impex"))
@@ -59,9 +67,21 @@ fn parse_impex_attributes(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream 
             tokens
                 .into_iter()
                 .filter_map(|path| path.get_ident().cloned())
+        })
+        .filter(|ident| {
+            if ident == "PartialEq" {
+                *has_partial_eq = true;
+                false
+            } else if ident == "Eq" {
+                *has_eq = true;
+                false
+            } else {
+                true
+            }
         });
 
-    quote! { serde::Deserialize, serde::Serialize #(, #extra_derives)* }
+    let derives = quote! { serde::Deserialize, serde::Serialize #(, #extra_derives)* };
+    (derives, *has_partial_eq, *has_eq)
 }
 
 fn generate_named_struct(
@@ -73,6 +93,8 @@ fn generate_named_struct(
         original_name,
         vis,
         derives,
+        has_partial_eq,
+        has_eq,
     } = ctx;
 
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
@@ -160,6 +182,49 @@ fn generate_named_struct(
         quote! {}
     };
 
+    // Generate PartialEq and Eq implementations with proper bounds
+    let mut eq_impl = quote! {};
+    let mut partial_eq_impl = quote! {};
+    if has_partial_eq || has_eq {
+        let partial_eq_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: PartialEq
+            }
+        });
+
+        let eq_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: Eq
+            }
+        });
+
+        let field_comparisons = field_names.iter().map(|name| {
+            quote! { self.#name == other.#name }
+        });
+
+        if has_partial_eq {
+            partial_eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> PartialEq for #impex_name<TW>
+                where
+                    #(#partial_eq_where_clauses),*
+                {
+                    fn eq(&self, other: &Self) -> bool {
+                        #(#field_comparisons)&&*
+                    }
+                }
+            }
+        }
+
+        if has_eq {
+            eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> Eq for #impex_name<TW>
+                where
+                    #(#eq_where_clauses),*
+                {}
+            }
+        }
+    }
+
     quote! {
         #[derive(#derives)]
         #[serde(default)]
@@ -205,6 +270,8 @@ fn generate_named_struct(
         }
 
         #visitor_impl
+        #eq_impl
+        #partial_eq_impl
     }
 }
 
@@ -217,6 +284,8 @@ fn generate_tuple_struct(
         original_name,
         vis,
         derives,
+        has_partial_eq,
+        has_eq,
     } = ctx;
 
     let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
@@ -301,6 +370,48 @@ fn generate_tuple_struct(
         quote! {}
     };
 
+    let mut eq_impl = quote! {};
+    let mut partial_eq_impl = quote! {};
+    if has_partial_eq || has_eq {
+        let partial_eq_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: PartialEq
+            }
+        });
+
+        let eq_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: Eq
+            }
+        });
+
+        let field_comparisons = field_indices.iter().map(|idx| {
+            quote! { self.#idx == other.#idx }
+        });
+
+        if has_partial_eq {
+            partial_eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> PartialEq for #impex_name<TW>
+                where
+                    #(#partial_eq_where_clauses),*
+                {
+                    fn eq(&self, other: &Self) -> bool {
+                        #(#field_comparisons)&&*
+                    }
+                }
+            }
+        }
+
+        if has_eq {
+            eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> Eq for #impex_name<TW>
+                where
+                    #(#eq_where_clauses),*
+                {}
+            }
+        }
+    }
+
     quote! {
         #[derive(#derives)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
@@ -345,6 +456,8 @@ fn generate_tuple_struct(
         }
 
         #visitor_impl
+        #eq_impl
+        #partial_eq_impl
     }
 }
 
@@ -354,6 +467,8 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         original_name,
         vis,
         derives,
+        has_partial_eq,
+        has_eq,
     } = ctx;
 
     // Generate enum variants
@@ -656,6 +771,112 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         quote! {}
     };
 
+    let mut eq_impl = quote! {};
+    let mut partial_eq_impl = quote! {};
+
+    if has_partial_eq || has_eq {
+        let mut all_field_types = Vec::new();
+        for variant in &data_enum.variants {
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    all_field_types.extend(fields.named.iter().map(|f| &f.ty));
+                }
+                Fields::Unnamed(fields) => {
+                    all_field_types.extend(fields.unnamed.iter().map(|f| &f.ty));
+                }
+                Fields::Unit => {}
+            }
+        }
+
+        let partial_eq_where_clauses = all_field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: PartialEq
+            }
+        });
+
+        let eq_where_clauses = all_field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: Eq
+            }
+        });
+
+        // Generate PartialEq match arms for comparing variants
+        let partial_eq_match_arms = data_enum.variants.iter().map(|variant| {
+            let variant_name = &variant.ident;
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    let field_names: Vec<_> = fields
+                        .named
+                        .iter()
+                        .map(|f| f.ident.as_ref().unwrap())
+                        .collect();
+                    let self_fields: Vec<_> = field_names
+                        .iter()
+                        .map(|name| Ident::new(&format!("self_{}", name), name.span()))
+                        .collect();
+                    let other_fields: Vec<_> = field_names
+                        .iter()
+                        .map(|name| Ident::new(&format!("other_{}", name), name.span()))
+                        .collect();
+                    let comparisons = self_fields.iter().zip(other_fields.iter()).map(|(s, o)| {
+                        quote! { #s == #o }
+                    });
+                    quote! {
+                        (Self::#variant_name { #(#field_names: #self_fields),* },
+                         Self::#variant_name { #(#field_names: #other_fields),* }) => {
+                            #(#comparisons)&&*
+                        }
+                    }
+                }
+                Fields::Unnamed(fields) => {
+                    let self_fields: Vec<Ident> = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("self_{}", i + 1), variant_name.span()))
+                        .collect();
+                    let other_fields: Vec<Ident> = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("other_{}", i + 1), variant_name.span()))
+                        .collect();
+                    let comparisons = self_fields.iter().zip(other_fields.iter()).map(|(s, o)| {
+                        quote! { #s == #o }
+                    });
+                    quote! {
+                        (Self::#variant_name(#(#self_fields),*),
+                         Self::#variant_name(#(#other_fields),*)) => {
+                            #(#comparisons)&&*
+                        }
+                    }
+                }
+                Fields::Unit => quote! {
+                    (Self::#variant_name, Self::#variant_name) => true
+                },
+            }
+        });
+
+        if has_partial_eq {
+            partial_eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> PartialEq for #impex_name<TW>
+                where
+                    #(#partial_eq_where_clauses),*
+                {
+                    fn eq(&self, other: &Self) -> bool {
+                        match (self, other) {
+                            #(#partial_eq_match_arms),*
+                            _ => false,
+                        }
+                    }
+                }
+            }
+        };
+
+        if has_eq {
+            eq_impl = quote! {
+                impl<TW: ::impex::WrapperSettings> Eq for #impex_name<TW>
+                where
+                    #(#eq_where_clauses),*
+                {}
+            }
+        }
+    }
+
     quote! {
         #[derive(#derives)]
         #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
@@ -704,5 +925,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         }
 
         #visitor_impl
+        #eq_impl
+        #partial_eq_impl
     }
 }

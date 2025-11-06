@@ -16,8 +16,6 @@ pub trait Visitor<T> {
 pub trait WrapperSettings: Sized + Default + Clone {
     type PrimitiveWrapper<T: ImpexPrimitive>: Impex<Self, Value = T>
         + serde::de::DeserializeOwned
-        + PartialEq
-        + Eq
         + serde::Serialize
         + Debug
         + Default

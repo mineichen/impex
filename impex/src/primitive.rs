@@ -86,15 +86,32 @@ impl<T: ImpexPrimitive, TW> Impex<TW> for ImpexPrimitiveValue<T> {
 }
 
 pub trait ImpexPrimitive:
-    Sized + serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Default + Clone
+    Sized + serde::de::DeserializeOwned + serde::Serialize + Debug + Default + Clone
 {
 }
 
 impl ImpexPrimitive for String {}
-impl ImpexPrimitive for u32 {}
+impl ImpexPrimitive for bool {}
+impl ImpexPrimitive for i8 {}
+impl ImpexPrimitive for i16 {}
 impl ImpexPrimitive for i32 {}
 impl ImpexPrimitive for i64 {}
-
+impl ImpexPrimitive for i128 {}
+impl ImpexPrimitive for u8 {}
+impl ImpexPrimitive for u16 {}
+impl ImpexPrimitive for u32 {}
+impl ImpexPrimitive for u64 {}
+impl ImpexPrimitive for u128 {}
+impl ImpexPrimitive for usize {}
+impl ImpexPrimitive for f32 {}
+impl ImpexPrimitive for f64 {}
+impl ImpexPrimitive for char {}
+// impl ImpexPrimitive for std::num::NonZeroU8 {}
+// impl ImpexPrimitive for std::num::NonZeroU16 {}
+// impl ImpexPrimitive for std::num::NonZeroU32 {}
+// impl ImpexPrimitive for std::num::NonZeroU64 {}
+// impl ImpexPrimitive for std::num::NonZeroU128 {}
+// impl ImpexPrimitive for std::num::NonZeroUsize {}
 ///
 /// Wraps a normal value so it can be turned into a impex, even if the type doesn't implement IntoImpex
 /// This should be a field attribute #[impex(primitive)] in the macro

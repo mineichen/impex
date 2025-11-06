@@ -110,6 +110,30 @@ impl<TW: ::impex::WrapperSettings> Default for KeyStructConfigImpex<TW> {
     }
 }
 
+impl<TW: ::impex::WrapperSettings> PartialEq for KeyStructConfigImpex<TW>
+where
+    <u32 as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <Vec<u32> as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <EnumConfig as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.num_cores == other.num_cores
+            && self.num_threads == other.num_threads
+            && self.enum_config == other.enum_config
+            && self.tuple_struct_config == other.tuple_struct_config
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Eq for KeyStructConfigImpex<TW>
+where
+    <u32 as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <Vec<u32> as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <EnumConfig as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: Eq,
+{
+}
+
 // #[derive(serde::Deserialize, serde::Serialize)]
 // struct ImpexSubConfigWrapper(ImpexSubConfig);
 // impl std::ops::Deref for ImpexSubConfigWrapper {
@@ -142,7 +166,7 @@ impl<TW: ::impex::WrapperSettings> Default for KeyStructConfigImpex<TW> {
 //     }
 // }
 //
-#[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>
 // where
 //     TW::PrimitiveWrapper<String>: Default,
@@ -264,7 +288,44 @@ impl<TW: ::impex::WrapperSettings> Default for EnumConfigImpex<TW> {
     }
 }
 
-#[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
+impl<TW: ::impex::WrapperSettings> PartialEq for EnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Foo {
+                    foo_value: self_foo_value,
+                    tuple_struct_config: self_tuple_struct_config,
+                },
+                Self::Foo {
+                    foo_value: other_foo_value,
+                    tuple_struct_config: other_tuple_struct_config,
+                },
+            ) => {
+                self_foo_value == other_foo_value
+                    && self_tuple_struct_config == other_tuple_struct_config
+            }
+            (Self::Bar(self_1, self_2, self_3), Self::Bar(other_1, other_2, other_3)) => {
+                self_1 == other_1 && self_2 == other_2 && self_3 == other_3
+            }
+            _ => false,
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Eq for EnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: Eq,
+{
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct TupleStructConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
     pub <i32 as ::impex::IntoImpex<TW>>::Impex,
     pub <i64 as ::impex::IntoImpex<TW>>::Impex,
@@ -308,6 +369,23 @@ impl<TW: ::impex::WrapperSettings> Default for TupleStructConfigImpex<TW> {
             ::impex::IntoImpex::<TW>::into_implicit(x.1),
         )
     }
+}
+
+impl<TW: ::impex::WrapperSettings> PartialEq for TupleStructConfigImpex<TW>
+where
+    <i32 as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <i64 as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Eq for TupleStructConfigImpex<TW>
+where
+    <i32 as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <i64 as ::impex::IntoImpex<TW>>::Impex: Eq,
+{
 }
 
 #[cfg(feature = "visitor")]
