@@ -76,6 +76,7 @@ fn generate_named_struct(
     } = ctx;
 
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+    let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
 
     // Generate the Impex struct definition
     let impex_fields = fields.named.iter().map(|f| {
@@ -130,6 +131,35 @@ fn generate_named_struct(
         }
     });
 
+    // Generate Visitor implementation (only if visitor feature is enabled)
+    let visitor_impl = if cfg!(feature = "visitor") {
+        let visitor_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>
+            }
+        });
+
+        let visitor_visit_fields = field_names.iter().map(|name| {
+            quote! {
+                ::impex::Visitor::<T>::visit(&mut self.#name, ctx);
+            }
+        });
+
+        quote! {
+            #[cfg(feature = "visitor")]
+            impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
+            where
+                #(#visitor_where_clauses),*
+            {
+                fn visit(&mut self, ctx: &mut T) {
+                    #(#visitor_visit_fields)*
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[derive(#derives)]
         #[serde(default)]
@@ -173,6 +203,8 @@ fn generate_named_struct(
                 }
             }
         }
+
+        #visitor_impl
     }
 }
 
@@ -240,6 +272,35 @@ fn generate_tuple_struct(
         }
     });
 
+    // Generate Visitor implementation (only if visitor feature is enabled)
+    let visitor_impl = if cfg!(feature = "visitor") {
+        let visitor_where_clauses = field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>
+            }
+        });
+
+        let visitor_visit_fields = field_indices.iter().map(|idx| {
+            quote! {
+                ::impex::Visitor::<T>::visit(&mut self.#idx, ctx);
+            }
+        });
+
+        quote! {
+            #[cfg(feature = "visitor")]
+            impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
+            where
+                #(#visitor_where_clauses),*
+            {
+                fn visit(&mut self, ctx: &mut T) {
+                    #(#visitor_visit_fields)*
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[derive(#derives)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
@@ -282,6 +343,8 @@ fn generate_tuple_struct(
                 )
             }
         }
+
+        #visitor_impl
     }
 }
 
@@ -518,6 +581,81 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         }
     });
 
+    let visitor_impl = if cfg!(feature = "visitor") {
+        let mut visitor_field_types = Vec::new();
+        for variant in &data_enum.variants {
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    visitor_field_types.extend(fields.named.iter().map(|f| &f.ty));
+                }
+                Fields::Unnamed(fields) => {
+                    visitor_field_types.extend(fields.unnamed.iter().map(|f| &f.ty));
+                }
+                Fields::Unit => {}
+            }
+        }
+
+        let visitor_where_clauses = visitor_field_types.iter().map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>
+            }
+        });
+
+        // Generate Visitor match arms
+        let visitor_match_arms = data_enum.variants.iter().map(|variant| {
+            let variant_name = &variant.ident;
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                    let visit_calls = field_names.iter().map(|name| {
+                        quote! {
+                            ::impex::Visitor::<T>::visit(#name, ctx);
+                        }
+                    });
+                    quote! {
+                        Self::#variant_name { #(#field_names),* } => {
+                            #(#visit_calls)*
+                        }
+                    }
+                }
+                Fields::Unnamed(fields) => {
+                    let field_names: Vec<Ident> = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("x{}", i + 1), variant_name.span()))
+                        .collect();
+                    let visit_calls = field_names.iter().map(|name| {
+                        quote! {
+                            ::impex::Visitor::<T>::visit(#name, ctx);
+                        }
+                    });
+                    quote! {
+                        Self::#variant_name(#(#field_names),*) => {
+                            #(#visit_calls)*
+                        }
+                    }
+                }
+                Fields::Unit => quote! {
+                    Self::#variant_name => {}
+                },
+            }
+        });
+
+        quote! {
+            #[cfg(feature = "visitor")]
+            impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
+            where
+                #(#visitor_where_clauses),*
+            {
+                fn visit(&mut self, ctx: &mut T) {
+                    match self {
+                        #(#visitor_match_arms),*
+                    }
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[derive(#derives)]
         #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
@@ -564,5 +702,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                 }
             }
         }
+
+        #visitor_impl
     }
 }

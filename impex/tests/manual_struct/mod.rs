@@ -142,7 +142,7 @@ impl<TW: ::impex::WrapperSettings> Default for KeyStructConfigImpex<TW> {
 //     }
 // }
 //
-#[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[derive(PartialEq, Eq, serde::Deserialize, serde::Serialize, Debug)]
 pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>
 // where
 //     TW::PrimitiveWrapper<String>: Default,
@@ -307,5 +307,59 @@ impl<TW: ::impex::WrapperSettings> Default for TupleStructConfigImpex<TW> {
             ::impex::IntoImpex::<TW>::into_implicit(x.0),
             ::impex::IntoImpex::<TW>::into_implicit(x.1),
         )
+    }
+}
+
+#[cfg(feature = "visitor")]
+impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for KeyStructConfigImpex<TW>
+where
+    <u32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <u32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <EnumConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        ::impex::Visitor::<T>::visit(&mut self.num_cores, ctx);
+        ::impex::Visitor::<T>::visit(&mut self.num_threads, ctx);
+        ::impex::Visitor::<T>::visit(&mut self.enum_config, ctx);
+        ::impex::Visitor::<T>::visit(&mut self.tuple_struct_config, ctx);
+    }
+}
+#[cfg(feature = "visitor")]
+impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for EnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <String as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        match self {
+            Self::Foo {
+                foo_value,
+                tuple_struct_config,
+            } => {
+                ::impex::Visitor::<T>::visit(foo_value, ctx);
+                ::impex::Visitor::<T>::visit(tuple_struct_config, ctx);
+            }
+            Self::Bar(x1, x2, x3) => {
+                ::impex::Visitor::<T>::visit(x1, ctx);
+                ::impex::Visitor::<T>::visit(x2, ctx);
+                ::impex::Visitor::<T>::visit(x3, ctx);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "visitor")]
+impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for TupleStructConfigImpex<TW>
+where
+    <i32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <i64 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        ::impex::Visitor::<T>::visit(&mut self.0, ctx);
+        ::impex::Visitor::<T>::visit(&mut self.1, ctx);
     }
 }

@@ -7,6 +7,11 @@ pub use primitive::*;
 
 pub use impex_derive::Impex;
 
+#[cfg(feature = "visitor")]
+pub trait Visitor<T> {
+    fn visit(&mut self, ctx: &mut T);
+}
+
 pub trait WrapperSettings: Sized + Default + Clone {
     type PrimitiveWrapper<T: ImpexPrimitive>: Impex<Self, Value = T>
         + serde::de::DeserializeOwned
