@@ -1,7 +1,7 @@
 // #[derive(Impex)]
 pub struct KeyStructConfig {
     pub num_cores: u32,
-    pub num_threads: u32,
+    pub num_threads: Vec<u32>,
     pub enum_config: EnumConfig,
     pub tuple_struct_config: TupleStructConfig,
 }
@@ -10,7 +10,7 @@ impl Default for KeyStructConfig {
     fn default() -> Self {
         Self {
             num_cores: Default::default(),
-            num_threads: 42,
+            num_threads: vec![42],
             enum_config: Default::default(),
             tuple_struct_config: TupleStructConfig::default(),
         }
@@ -51,7 +51,7 @@ pub struct KeyStructConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultW
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
     pub num_cores: <u32 as ::impex::IntoImpex<TW>>::Impex,
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-    pub num_threads: <u32 as ::impex::IntoImpex<TW>>::Impex,
+    pub num_threads: <Vec<u32> as ::impex::IntoImpex<TW>>::Impex,
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
     pub enum_config: <EnumConfig as ::impex::IntoImpex<TW>>::Impex,
     #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
@@ -314,7 +314,7 @@ impl<TW: ::impex::WrapperSettings> Default for TupleStructConfigImpex<TW> {
 impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for KeyStructConfigImpex<TW>
 where
     <u32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
-    <u32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <Vec<u32> as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
     <EnumConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
     <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
 {

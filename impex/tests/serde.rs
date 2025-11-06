@@ -4,12 +4,12 @@ mod generated_struct;
 mod manual_struct;
 
 // Switch between manual and generated implementations:
-// use crate::manual_struct::{
-//     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfigImpex, TupleStructConfig,
-// };
 use crate::generated_struct::{
     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
 };
+// use crate::manual_struct::{
+//     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
+// };
 
 #[test]
 fn serialize_with_defaults() {
@@ -21,9 +21,9 @@ fn serialize_with_defaults() {
         serde_json::from_str::<KeyStructConfigImpex<::impex::DefaultWrapperSettings>>(text)
             .unwrap();
     assert_eq!(3, *obj.num_cores);
-    assert_eq!(42, *obj.num_threads);
+    assert_eq!(42, *obj.num_threads[0]);
     assert!(obj.num_cores.is_explicit());
-    assert!(obj.num_threads.is_implicit());
+    assert!(obj.num_threads[0].is_implicit());
     assert_eq!(text, serde_json::to_string(&obj).unwrap().as_str());
 
     match &mut obj.enum_config {

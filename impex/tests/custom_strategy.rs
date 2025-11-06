@@ -148,7 +148,7 @@ fn test_visitor() {
     assert_eq!(x2.variable_name, Some(variable_name));
     assert_eq!(x3.0.variable_name, Some(variable_name));
     assert_eq!(x3.1.variable_name, Some(variable_name));
-    assert_eq!(config.num_threads.variable_name, Some(variable_name));
+    assert_eq!(config.num_threads[0].variable_name, Some(variable_name));
     assert_eq!(config.num_cores.variable_name, Some(variable_name));
     config.enum_config = ::impex::IntoImpex::into_explicit(EnumConfig::Foo {
         foo_value: "Foo".into(),

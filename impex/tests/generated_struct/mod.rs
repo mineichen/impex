@@ -7,7 +7,7 @@
 #[derive(impex::Impex)]
 pub struct KeyStructConfig {
     pub num_cores: u32,
-    pub num_threads: u32,
+    pub num_threads: Vec<u32>,
     pub enum_config: EnumConfig,
     pub tuple_struct_config: TupleStructConfig,
 }
@@ -16,7 +16,7 @@ impl Default for KeyStructConfig {
     fn default() -> Self {
         Self {
             num_cores: Default::default(),
-            num_threads: 42,
+            num_threads: vec![42],
             enum_config: Default::default(),
             tuple_struct_config: TupleStructConfig::default(),
         }

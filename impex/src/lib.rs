@@ -2,6 +2,7 @@
 use std::fmt::Debug;
 
 mod primitive;
+mod vec;
 
 pub use primitive::*;
 
