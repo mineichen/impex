@@ -75,12 +75,15 @@ fn parse_impex_attributes(attrs: &[syn::Attribute]) -> (proc_macro2::TokenStream
             } else if ident == "Eq" {
                 *has_eq = true;
                 false
+            } else if ident == "Clone" {
+                // Clone is always derived, so filter it out
+                false
             } else {
                 true
             }
         });
 
-    let derives = quote! { serde::Deserialize, serde::Serialize #(, #extra_derives)* };
+    let derives = quote! { #(#extra_derives),* };
     (derives, *has_partial_eq, *has_eq)
 }
 
@@ -100,13 +103,12 @@ fn generate_named_struct(
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
     let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
 
-    // Generate the Impex struct definition
+    // Generate the Impex struct definition (without serde attributes)
     let impex_fields = fields.named.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
         let field_vis = &f.vis;
         quote! {
-            #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
             #field_vis #name: <#ty as ::impex::IntoImpex<TW>>::Impex
         }
     });
@@ -168,7 +170,6 @@ fn generate_named_struct(
         });
 
         quote! {
-            #[cfg(feature = "visitor")]
             impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
             where
                 #(#visitor_where_clauses),*
@@ -225,11 +226,101 @@ fn generate_named_struct(
         }
     }
 
+    // Generate serialization struct with serde attributes
+    let serde_struct_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
+    let serde_fields = fields.named.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        quote! {
+            #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+            #name: <#ty as ::impex::IntoImpex<TW>>::Impex
+        }
+    });
+
+    let serde_from_fields: Vec<_> = field_names
+        .iter()
+        .map(|name| {
+            quote! { #name: value.#name }
+        })
+        .collect();
+
+    let serde_into_fields: Vec<_> = field_names
+        .iter()
+        .map(|name| {
+            quote! { #name: self.#name }
+        })
+        .collect();
+
+    let serde_where_clauses: Vec<_> = field_types.iter().map(|ty| {
+        quote! {
+            <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
+        }
+    }).collect();
+
     quote! {
-        #[derive(#derives)]
-        #[serde(default)]
+        #[derive(Clone, #derives)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_fields),*
+        }
+
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[serde(default, bound = "")]
+        struct #serde_struct_name<TW: ::impex::WrapperSettings> {
+            #(#serde_fields),*
+        }
+
+        impl<TW: ::impex::WrapperSettings> Default for #serde_struct_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn default() -> Self {
+                let default_value = #original_name::default();
+                let impex: #impex_name<TW> = ::impex::IntoImpex::into_impex(default_value, false);
+                impex.into()
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#serde_struct_name<TW>> for #impex_name<TW> {
+            fn from(value: #serde_struct_name<TW>) -> Self {
+                Self {
+                    #(#serde_from_fields),*
+                }
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#impex_name<TW>> for #serde_struct_name<TW> {
+            fn from(value: #impex_name<TW>) -> Self {
+                Self {
+                    #(#field_names: value.#field_names),*
+                }
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> ::serde::Serialize for #impex_name<TW>
+        where
+            #(#serde_where_clauses,)*
+            Self: Clone,
+        {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                let serde_struct: #serde_struct_name<TW> = Clone::clone(self).into();
+                serde_struct.serialize(serializer)
+            }
+        }
+
+        impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for #impex_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                let serde_struct = #serde_struct_name::<TW>::deserialize(deserializer)?;
+                Ok(serde_struct.into())
+            }
         }
 
         impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for #original_name {
@@ -293,11 +384,15 @@ fn generate_tuple_struct(
     let field_indices: Vec<Index> = (0..fields.unnamed.len()).map(Index::from).collect();
 
     // Generate the Impex struct definition
-    let impex_fields = field_types.iter().zip(field_vis.iter()).map(|(ty, vis)| {
-        quote! {
-            #vis <#ty as ::impex::IntoImpex<TW>>::Impex
-        }
-    });
+    let impex_fields: Vec<_> = field_types
+        .iter()
+        .zip(field_vis.iter())
+        .map(|(ty, vis)| {
+            quote! {
+                #vis <#ty as ::impex::IntoImpex<TW>>::Impex
+            }
+        })
+        .collect();
 
     // Generate IntoImpex implementation
     let into_impex_fields = field_indices.iter().map(|idx| {
@@ -356,7 +451,6 @@ fn generate_tuple_struct(
         });
 
         quote! {
-            #[cfg(feature = "visitor")]
             impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
             where
                 #(#visitor_where_clauses),*
@@ -412,11 +506,87 @@ fn generate_tuple_struct(
         }
     }
 
+    // Generate serialization struct
+    let serde_struct_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
+    let serde_into_fields: Vec<_> = field_indices
+        .iter()
+        .map(|idx| {
+            quote! { self.#idx }
+        })
+        .collect();
+    let serde_from_fields: Vec<_> = field_indices
+        .iter()
+        .map(|idx| {
+            quote! { value.#idx }
+        })
+        .collect();
+    let serde_where_clauses: Vec<_> = field_types.iter().map(|ty| {
+        quote! {
+            <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
+        }
+    }).collect();
+
     quote! {
-        #[derive(#derives)]
+        #[derive(Clone, #derives)]
         #vis struct #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings>(
             #(#impex_fields),*
         );
+
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound = "")]
+        struct #serde_struct_name<TW: ::impex::WrapperSettings>(
+            #(#impex_fields),*
+        );
+
+        impl<TW: ::impex::WrapperSettings> Default for #serde_struct_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn default() -> Self {
+                let default_value = #original_name::default();
+                let impex: #impex_name<TW> = ::impex::IntoImpex::into_impex(default_value, false);
+                Self(#(impex.#field_indices),*)
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#serde_struct_name<TW>> for #impex_name<TW> {
+            fn from(value: #serde_struct_name<TW>) -> Self {
+                Self(#(#serde_from_fields),*)
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#impex_name<TW>> for #serde_struct_name<TW> {
+            fn from(value: #impex_name<TW>) -> Self {
+                Self(#(value.#field_indices),*)
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> ::serde::Serialize for #impex_name<TW>
+        where
+            #(#serde_where_clauses,)*
+            Self: Clone,
+        {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                let serde_struct: #serde_struct_name<TW> = Clone::clone(self).into();
+                serde_struct.serialize(serializer)
+            }
+        }
+
+        impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for #impex_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                let serde_struct = #serde_struct_name::<TW>::deserialize(deserializer)?;
+                Ok(serde_struct.into())
+            }
+        }
 
         impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for #original_name {
             type Impex = #impex_name<TW>;
@@ -471,7 +641,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         has_eq,
     } = ctx;
 
-    // Generate enum variants
+    // Generate enum variants without serde attributes
     let impex_variants = data_enum.variants.iter().map(|variant| {
         let variant_name = &variant.ident;
         match &variant.fields {
@@ -480,8 +650,40 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     let name = &f.ident;
                     let ty = &f.ty;
                     quote! {
+                        #name: <#ty as ::impex::IntoImpex<TW>>::Impex
+                    }
+                });
+                quote! {
+                    #variant_name {
+                        #(#fields),*
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let fields = fields.unnamed.iter().map(|f| {
+                    let ty = &f.ty;
+                    quote! {
+                        <#ty as ::impex::IntoImpex<TW>>::Impex
+                    }
+                });
+                quote! {
+                    #variant_name(#(#fields),*)
+                }
+            }
+            Fields::Unit => quote! { #variant_name },
+        }
+    });
+
+    // Generate serde enum variants with attributes
+    let serde_variants = data_enum.variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        match &variant.fields {
+            Fields::Named(fields) => {
+                let fields = fields.named.iter().map(|f| {
+                    let name = &f.ident;
+                    let ty = &f.ty;
+                    quote! {
                         #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-                        //#[serde(default)]
                         #name: <#ty as ::impex::IntoImpex<TW>>::Impex
                     }
                 });
@@ -755,7 +957,6 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         });
 
         quote! {
-            #[cfg(feature = "visitor")]
             impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
             where
                 #(#visitor_where_clauses),*
@@ -877,10 +1078,147 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         }
     }
 
+    // Generate conversion match arms between impex and serde enums
+    let serde_enum_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
+
+    let serde_to_impex_arms = data_enum.variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        match &variant.fields {
+            Fields::Named(fields) => {
+                let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                quote! {
+                    #serde_enum_name::#variant_name { #(#field_names),* } =>
+                        #impex_name::#variant_name { #(#field_names),* }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let field_names: Vec<Ident> = (0..fields.unnamed.len())
+                    .map(|i| Ident::new(&format!("x{}", i + 1), variant_name.span()))
+                    .collect();
+                quote! {
+                    #serde_enum_name::#variant_name(#(#field_names),*) =>
+                        #impex_name::#variant_name(#(#field_names),*)
+                }
+            }
+            Fields::Unit => quote! {
+                #serde_enum_name::#variant_name => #impex_name::#variant_name
+            },
+        }
+    });
+
+    let impex_to_serde_arms: Vec<_> = data_enum
+        .variants
+        .iter()
+        .map(|variant| {
+            let variant_name = &variant.ident;
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                    quote! {
+                        #impex_name::#variant_name { #(#field_names),* } =>
+                            #serde_enum_name::#variant_name { #(#field_names),* }
+                    }
+                }
+                Fields::Unnamed(fields) => {
+                    let field_names: Vec<Ident> = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("x{}", i + 1), variant_name.span()))
+                        .collect();
+                    quote! {
+                        #impex_name::#variant_name(#(#field_names),*) =>
+                            #serde_enum_name::#variant_name(#(#field_names),*)
+                    }
+                }
+                Fields::Unit => quote! {
+                    #impex_name::#variant_name => #serde_enum_name::#variant_name
+                },
+            }
+        })
+        .collect();
+
+    // Collect all field types for where clauses
+    let mut all_field_types = Vec::new();
+    for variant in &data_enum.variants {
+        match &variant.fields {
+            Fields::Named(fields) => {
+                all_field_types.extend(fields.named.iter().map(|f| &f.ty));
+            }
+            Fields::Unnamed(fields) => {
+                all_field_types.extend(fields.unnamed.iter().map(|f| &f.ty));
+            }
+            Fields::Unit => {}
+        }
+    }
+
+    let serde_where_clauses: Vec<_> = all_field_types.iter().map(|ty| {
+        quote! {
+            <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
+        }
+    }).collect();
+
     quote! {
-        #[derive(#derives)]
+        #[derive(Clone, #derives)]
         #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_variants),*
+        }
+
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound = "")]
+        enum #serde_enum_name<TW: ::impex::WrapperSettings> {
+            #(#serde_variants),*
+        }
+
+        impl<TW: ::impex::WrapperSettings> Default for #serde_enum_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn default() -> Self {
+                let default_value = #original_name::default();
+                let impex: #impex_name<TW> = ::impex::IntoImpex::into_impex(default_value, false);
+                impex.into()
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#serde_enum_name<TW>> for #impex_name<TW> {
+            fn from(value: #serde_enum_name<TW>) -> Self {
+                match value {
+                    #(#serde_to_impex_arms),*
+                }
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> From<#impex_name<TW>> for #serde_enum_name<TW> {
+            fn from(value: #impex_name<TW>) -> Self {
+                match value {
+                    #(#impex_to_serde_arms),*
+                }
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> ::serde::Serialize for #impex_name<TW>
+        where
+            #(#serde_where_clauses,)*
+            Self: Clone,
+        {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                let serde_enum: #serde_enum_name<TW> = self.clone().into();
+                serde_enum.serialize(serializer)
+            }
+        }
+
+        impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for #impex_name<TW>
+        where
+            #(#serde_where_clauses),*
+        {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                let serde_enum = #serde_enum_name::<TW>::deserialize(deserializer)?;
+                Ok(serde_enum.into())
+            }
         }
 
         impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for #original_name {
