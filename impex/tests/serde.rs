@@ -317,3 +317,107 @@ fn mixed_enum_into_value_roundtrip() {
         MixedEnumConfig::Tuple(123)
     );
 }
+
+// ============================================================================
+// OptionImpex Tests
+// ============================================================================
+
+#[derive(Default, impex::Impex)]
+pub struct OptionTestStruct {
+    pub opt: Option<i32>,
+}
+
+#[derive(impex::Impex)]
+pub struct OptionTestStructWithSomeDefault {
+    pub opt: Option<i32>,
+}
+
+impl Default for OptionTestStructWithSomeDefault {
+    fn default() -> Self {
+        Self { opt: Some(42) }
+    }
+}
+
+#[test]
+fn option_impex_explicit_null_reserializes_as_null() {
+    // Deserialize with explicit null
+    let json = r#"{"opt":null}"#;
+    let obj: OptionTestStructImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    // The field should be explicit (null was present in JSON)
+    assert!(obj.opt.is_explicit(), "null in JSON should be explicit");
+    assert!(obj.opt.is_none(), "Value should be None");
+
+    // When serializing back, explicit null should appear
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{"opt":null}"#);
+}
+
+#[test]
+fn option_impex_missing_field_is_implicit_and_not_serialized() {
+    // Deserialize with missing field
+    let json = r#"{}"#;
+    let obj: OptionTestStructImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    // The field should be implicit (not present in JSON)
+    assert!(obj.opt.is_implicit(), "Missing field should be implicit");
+    assert!(obj.opt.is_none(), "Value should be None");
+
+    // When serializing back, implicit field should NOT appear
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{}"#);
+}
+
+#[test]
+fn option_impex_explicit_value_reserializes() {
+    // Deserialize with explicit value
+    let json = r#"{"opt":42}"#;
+    let obj: OptionTestStructImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    // The field should be explicit
+    assert!(obj.opt.is_explicit(), "Value in JSON should be explicit");
+    assert_eq!(**obj.opt.as_ref().unwrap(), 42);
+
+    // When serializing back, explicit value should appear
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{"opt":42}"#);
+}
+
+#[test]
+fn some_option_impex_explicit_null_reserializes_as_null() {
+    // Deserialize with explicit null
+    let json = r#"{"opt":null}"#;
+    let obj: OptionTestStructWithSomeDefaultImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    // The field should be explicit (null was present in JSON)
+    assert!(obj.opt.is_explicit(), "null in JSON should be explicit");
+    assert!(obj.opt.is_none(), "Value should be None");
+
+    // When serializing back, explicit null should appear
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{"opt":null}"#);
+}
+
+#[test]
+fn some_option_impex_missing_field_is_implicit_and_not_serialized() {
+    // Deserialize with missing field
+    let json = r#"{}"#;
+    let obj: OptionTestStructWithSomeDefaultImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    // The field should be implicit (not present in JSON)
+    assert!(obj.opt.is_implicit(), "Missing field should be implicit");
+    assert_eq!(
+        obj.opt.as_ref().map(|x| **x),
+        Some(42),
+        "Value should be None"
+    );
+
+    // When serializing back, implicit field should NOT appear
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{}"#);
+}

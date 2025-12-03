@@ -1,9 +1,11 @@
 #![doc = include_str!("../../README.md")]
 use std::fmt::Debug;
 
+mod option;
 mod primitive;
 mod vec;
 
+pub use option::OptionImpex;
 pub use primitive::*;
 
 pub use impex_derive::Impex;
