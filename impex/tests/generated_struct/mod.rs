@@ -47,3 +47,34 @@ impl Default for TupleStructConfig {
         Self(42, 43)
     }
 }
+
+/// A pure unit enum - all variants are unit variants
+#[derive(Debug, PartialEq, Clone, impex::Impex, Default)]
+#[impex(derive(Debug, PartialEq, Eq, Clone))]
+pub enum UnionEnumConfig {
+    #[default]
+    Foo,
+    Bar,
+}
+
+/// A mixed enum with both unit and non-unit variants
+#[derive(Debug, PartialEq, Clone, impex::Impex, serde::Serialize)]
+#[impex(derive(Debug, PartialEq, Clone))]
+pub enum MixedEnumConfig {
+    Empty,
+    Named { value: String },
+    Tuple(i32),
+}
+
+impl Default for MixedEnumConfig {
+    fn default() -> Self {
+        MixedEnumConfig::Empty
+    }
+}
+
+/// A struct containing unit enum fields to test serialization
+#[derive(impex::Impex, Default)]
+pub struct StructWithUnitEnum {
+    pub unit_enum: UnionEnumConfig,
+    pub mixed_enum: MixedEnumConfig,
+}

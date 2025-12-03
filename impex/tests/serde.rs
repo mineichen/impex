@@ -3,18 +3,27 @@ mod generated_struct;
 #[allow(unused)]
 mod manual_struct;
 
-// Switch between manual and generated implementations:
-// use crate::generated_struct::{
-//     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
-// };
-use crate::manual_struct::{
-    EnumConfig, EnumConfigImpex, KeyStructConfigImpex, TupleStructConfig, TupleStructConfigImpex,
+// ============================================================================
+// Switch between manual and generated implementations by commenting/uncommenting:
+// ============================================================================
+
+// --- Use GENERATED (default, checked in) ---
+use crate::generated_struct::{
+    EnumConfig, EnumConfigImpex, KeyStructConfigImpex, MixedEnumConfig, MixedEnumConfigImpex,
+    StructWithUnitEnumImpex, TupleStructConfig, TupleStructConfigImpex, UnionEnumConfig,
+    UnionEnumConfigImpex,
 };
+
+// --- Use MANUAL (for debugging) ---
+// use crate::manual_struct::{
+//     EnumConfig, EnumConfigImpex, KeyStructConfigImpex, MixedEnumConfig, MixedEnumConfigImpex,
+//     StructWithUnitEnumImpex, TupleStructConfig, TupleStructConfigImpex, UnionEnumConfig,
+//     UnionEnumConfigImpex,
+// };
 
 #[test]
 fn serialize_with_defaults() {
     use impex::Impex;
-    //use std::ops::{Deref, DerefMut};
 
     let text = r#"{"num_cores":3}"#;
     let mut obj =
@@ -55,9 +64,6 @@ fn serialize_with_defaults() {
         }
         _ => panic!(),
     }
-    // *obj.sub.bar.make_defined() = "Custom".into();
-    // assert_eq!("Custom", *obj.sub.bar);
-    // assert_eq!("Foo", *obj.sub.foo);
     assert_eq!(
         r#"{"num_cores":3,"enum_config":{"Bar":["Custom",42,[42,43]]}}"#,
         serde_json::to_string(&obj).unwrap().as_str()
@@ -87,10 +93,227 @@ fn test_serialize_field_enum_skips_implicit_fields() {
         TupleStructConfig::default()
     );
 }
+
 #[test]
 fn tuple_struct() {
     let text = r#"[42, 84]"#;
     let tuple_struct: TupleStructConfigImpex<::impex::DefaultWrapperSettings> =
         serde_json::from_str(text).unwrap();
     assert!(tuple_struct.0.is_explicit());
+}
+
+// ============================================================================
+// Unit Enum Tests
+// ============================================================================
+
+#[test]
+fn unit_enum_implicit_is_missing_when_serializing() {
+    use impex::Impex;
+
+    // Deserialize an empty object - the unit_enum field takes its default value implicitly
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(r#"{}"#).unwrap();
+
+    // The unit_enum field should be implicit (loaded from default, not from JSON)
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_implicit(
+        &obj.unit_enum
+    ));
+
+    // When serializing back, implicit fields should be missing
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(
+        serialized, r#"{}"#,
+        "Implicit unit enum should not appear in output"
+    );
+}
+
+#[test]
+fn unit_enum_explicit_appears_when_serializing() {
+    use impex::Impex;
+
+    // Deserialize with the unit_enum field present - serializes as just "Foo"
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(r#"{"unit_enum":"Foo"}"#).unwrap();
+
+    // The unit_enum field should be explicit (it was in the JSON)
+    assert!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(&obj.unit_enum),
+        "Field present in JSON should be explicit"
+    );
+
+    // When serializing, explicit fields should appear as just the variant name
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(
+        serialized, r#"{"unit_enum":"Foo"}"#,
+        "Explicit unit enum should appear in output"
+    );
+}
+
+#[test]
+fn unit_enum_different_variant_explicit() {
+    use impex::Impex;
+
+    // Test with Bar variant explicitly set - serializes as just "Bar"
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(r#"{"unit_enum":"Bar"}"#).unwrap();
+
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &obj.unit_enum
+    ));
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{"unit_enum":"Bar"}"#);
+
+    // Verify the value is correct
+    assert_eq!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::into_value(obj.unit_enum),
+        UnionEnumConfig::Bar
+    );
+}
+
+#[test]
+fn unit_enum_into_impex_preserves_explicit_flag() {
+    use impex::{Impex, IntoImpex};
+
+    // Create explicit
+    let explicit: UnionEnumConfigImpex = <UnionEnumConfig as IntoImpex<
+        impex::DefaultWrapperSettings,
+    >>::into_explicit(UnionEnumConfig::Foo);
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &explicit
+    ));
+
+    // Create implicit
+    let implicit: UnionEnumConfigImpex = <UnionEnumConfig as IntoImpex<
+        impex::DefaultWrapperSettings,
+    >>::into_implicit(UnionEnumConfig::Bar);
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_implicit(
+        &implicit
+    ));
+    assert!(!<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &implicit
+    ));
+}
+
+// ============================================================================
+// Mixed Enum Tests (unit + non-unit variants)
+// ============================================================================
+
+#[test]
+fn mixed_enum_unit_variant_implicit() {
+    use impex::Impex;
+
+    // Default is Empty (unit variant), should be implicit
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(r#"{}"#).unwrap();
+
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_implicit(
+        &obj.mixed_enum
+    ));
+
+    // Should not appear in serialization
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{}"#);
+
+    // Verify default
+    assert!(obj.mixed_enum == MixedEnumConfigImpex::default());
+}
+
+#[test]
+fn mixed_enum_unit_variant_explicit() {
+    use impex::Impex;
+
+    // Empty variant explicitly provided - serializes as just "Empty"
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(r#"{"mixed_enum":"Empty"}"#).unwrap();
+
+    assert!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(&obj.mixed_enum),
+        "Unit variant present in JSON should be explicit"
+    );
+
+    // Should appear in serialization as just the variant name
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, r#"{"mixed_enum":"Empty"}"#);
+}
+
+#[test]
+fn mixed_enum_named_variant_explicit() {
+    use impex::Impex;
+
+    // Named variant with explicit value
+    let text = r#"{"mixed_enum":{"Named":{"value":"hello"}}}"#;
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(text).unwrap();
+
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &obj.mixed_enum
+    ));
+
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, text);
+}
+
+#[test]
+fn mixed_enum_tuple_variant_explicit() {
+    use impex::Impex;
+
+    // Tuple variant with explicit value
+    let text = r#"{"mixed_enum":{"Tuple":42}}"#;
+    let obj: StructWithUnitEnumImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(text).unwrap();
+
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &obj.mixed_enum
+    ));
+
+    let serialized = serde_json::to_string(&obj).unwrap();
+    assert_eq!(serialized, text);
+}
+
+#[test]
+fn mixed_enum_into_value_roundtrip() {
+    use impex::{Impex, IntoImpex};
+
+    // Test Empty variant
+    let empty: MixedEnumConfigImpex<impex::DefaultWrapperSettings> =
+        <MixedEnumConfig as IntoImpex<impex::DefaultWrapperSettings>>::into_explicit(
+            MixedEnumConfig::Empty,
+        );
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &empty
+    ));
+    assert_eq!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::into_value(empty),
+        MixedEnumConfig::Empty
+    );
+
+    // Test Named variant
+    let named: MixedEnumConfigImpex<impex::DefaultWrapperSettings> =
+        <MixedEnumConfig as IntoImpex<impex::DefaultWrapperSettings>>::into_explicit(
+            MixedEnumConfig::Named {
+                value: "test".to_string(),
+            },
+        );
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &named
+    ));
+    assert_eq!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::into_value(named),
+        MixedEnumConfig::Named {
+            value: "test".to_string()
+        }
+    );
+
+    // Test Tuple variant
+    let tuple: MixedEnumConfigImpex<impex::DefaultWrapperSettings> =
+        <MixedEnumConfig as IntoImpex<impex::DefaultWrapperSettings>>::into_explicit(
+            MixedEnumConfig::Tuple(123),
+        );
+    assert!(<_ as Impex<impex::DefaultWrapperSettings>>::is_explicit(
+        &tuple
+    ));
+    assert_eq!(
+        <_ as Impex<impex::DefaultWrapperSettings>>::into_value(tuple),
+        MixedEnumConfig::Tuple(123)
+    );
 }

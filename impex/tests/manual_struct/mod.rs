@@ -41,6 +41,37 @@ impl Default for TupleStructConfig {
     }
 }
 
+/// A unit enum - all variants are unit variants (no fields)
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub enum UnionEnumConfig {
+    #[default]
+    Foo,
+    Bar,
+}
+
+/// An enum with mixed variants - some unit, some with fields
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub enum MixedEnumConfig {
+    /// Unit variant
+    Empty,
+    /// Named fields variant
+    Named { value: String },
+    /// Tuple variant
+    Tuple(i32),
+}
+
+impl Default for MixedEnumConfig {
+    fn default() -> Self {
+        MixedEnumConfig::Empty
+    }
+}
+
+/// A struct containing unit enum fields to test serialization behavior
+pub struct StructWithUnitEnum {
+    pub unit_enum: UnionEnumConfig,
+    pub mixed_enum: MixedEnumConfig,
+}
+
 ///
 /// THE following will be auto generated
 ///
@@ -48,13 +79,13 @@ impl Default for TupleStructConfig {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct KeyStructConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
-    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
     pub num_cores: <u32 as ::impex::IntoImpex<TW>>::Impex,
-    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
     pub num_threads: <Vec<u32> as ::impex::IntoImpex<TW>>::Impex,
-    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
     pub enum_config: <EnumConfig as ::impex::IntoImpex<TW>>::Impex,
-    #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
     pub tuple_struct_config: <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex,
 }
 
@@ -169,10 +200,10 @@ where
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum EnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
     Foo {
-        #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+        #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
         //#[serde(default)]
         foo_value: <String as ::impex::IntoImpex<TW>>::Impex,
-        #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+        #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
         //#[serde(default)]
         tuple_struct_config: <TupleStructConfig as ::impex::IntoImpex<TW>>::Impex,
     },
@@ -436,5 +467,527 @@ where
     fn visit(&mut self, ctx: &mut T) {
         ::impex::Visitor::<T>::visit(&mut self.0, ctx);
         ::impex::Visitor::<T>::visit(&mut self.1, ctx);
+    }
+}
+
+// ============================================================================
+// UnionEnumConfig Impex Implementation (pure unit enum)
+// ============================================================================
+
+/// Visibility marker for Foo variant - tracks explicit/implicit state
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionEnumConfigFooVisibility {
+    is_explicit: bool,
+}
+
+impl Default for UnionEnumConfigFooVisibility {
+    fn default() -> Self {
+        Self { is_explicit: false } // Default is implicit
+    }
+}
+
+/// Visibility marker for Bar variant - tracks explicit/implicit state
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionEnumConfigBarVisibility {
+    is_explicit: bool,
+}
+
+impl Default for UnionEnumConfigBarVisibility {
+    fn default() -> Self {
+        Self { is_explicit: false } // Default is implicit
+    }
+}
+
+/// Impex for unit enum - each variant uses a visibility tuple variant
+#[derive(Debug, Clone)]
+pub enum UnionEnumConfigImpex {
+    Foo(UnionEnumConfigFooVisibility),
+    Bar(UnionEnumConfigBarVisibility),
+}
+
+// Custom Serialize - serialize as just the variant name string
+impl ::serde::Serialize for UnionEnumConfigImpex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ::serde::Serializer,
+    {
+        match self {
+            Self::Foo(_) => serializer.serialize_str("Foo"),
+            Self::Bar(_) => serializer.serialize_str("Bar"),
+        }
+    }
+}
+
+// Custom Deserialize - deserialize from variant name string
+impl<'de> ::serde::Deserialize<'de> for UnionEnumConfigImpex {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "Foo" => Ok(Self::Foo(UnionEnumConfigFooVisibility {
+                is_explicit: true,
+            })),
+            "Bar" => Ok(Self::Bar(UnionEnumConfigBarVisibility {
+                is_explicit: true,
+            })),
+            _ => Err(::serde::de::Error::unknown_variant(&s, &["Foo", "Bar"])),
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for UnionEnumConfig {
+    type Impex = UnionEnumConfigImpex;
+
+    fn into_impex(self, is_explicit: bool) -> Self::Impex {
+        match self {
+            UnionEnumConfig::Foo => {
+                UnionEnumConfigImpex::Foo(UnionEnumConfigFooVisibility { is_explicit })
+            }
+            UnionEnumConfig::Bar => {
+                UnionEnumConfigImpex::Bar(UnionEnumConfigBarVisibility { is_explicit })
+            }
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for UnionEnumConfigImpex {
+    type Value = UnionEnumConfig;
+
+    fn is_explicit(&self) -> bool {
+        match self {
+            UnionEnumConfigImpex::Foo(v) => v.is_explicit,
+            UnionEnumConfigImpex::Bar(v) => v.is_explicit,
+        }
+    }
+
+    fn into_value(self) -> Self::Value {
+        match self {
+            UnionEnumConfigImpex::Foo(_) => UnionEnumConfig::Foo,
+            UnionEnumConfigImpex::Bar(_) => UnionEnumConfig::Bar,
+        }
+    }
+
+    fn set_impex(&mut self, v: Self::Value, is_explicit: bool) {
+        *self = match v {
+            UnionEnumConfig::Foo => {
+                UnionEnumConfigImpex::Foo(UnionEnumConfigFooVisibility { is_explicit })
+            }
+            UnionEnumConfig::Bar => {
+                UnionEnumConfigImpex::Bar(UnionEnumConfigBarVisibility { is_explicit })
+            }
+        };
+    }
+}
+
+impl Default for UnionEnumConfigImpex {
+    fn default() -> Self {
+        match UnionEnumConfig::default() {
+            // Default gives is_explicit = false (implicit)
+            UnionEnumConfig::Foo => UnionEnumConfigImpex::Foo(Default::default()),
+            UnionEnumConfig::Bar => UnionEnumConfigImpex::Bar(Default::default()),
+        }
+    }
+}
+
+impl PartialEq for UnionEnumConfigImpex {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UnionEnumConfigImpex::Foo(a), UnionEnumConfigImpex::Foo(b)) => a == b,
+            (UnionEnumConfigImpex::Bar(a), UnionEnumConfigImpex::Bar(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for UnionEnumConfigImpex {}
+
+#[cfg(feature = "visitor")]
+impl<T> ::impex::Visitor<T> for UnionEnumConfigImpex {
+    fn visit(&mut self, _ctx: &mut T) {
+        // Unit enum has no fields to visit
+    }
+}
+
+// ============================================================================
+// MixedEnumConfig Impex Implementation (enum with unit + non-unit variants)
+// ============================================================================
+
+/// Visibility marker for Empty variant - tracks explicit/implicit state
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MixedEnumConfigEmptyVisibility {
+    is_explicit: bool,
+}
+
+impl Default for MixedEnumConfigEmptyVisibility {
+    fn default() -> Self {
+        Self { is_explicit: false } // Default is implicit
+    }
+}
+
+impl serde::Serialize for MixedEnumConfigEmptyVisibility {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str("Empty")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MixedEnumConfigEmptyVisibility {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self { is_explicit: true })
+    }
+}
+
+/// Impex type for mixed enum - unit variants use visibility tuple,
+/// non-unit variants track is_explicit through their fields.
+#[derive(Debug, Clone)]
+pub enum MixedEnumConfigImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
+    /// Unit variant uses visibility struct
+    Empty(MixedEnumConfigEmptyVisibility),
+    /// Named fields variant
+    Named {
+        value: <String as ::impex::IntoImpex<TW>>::Impex,
+    },
+    /// Tuple variant
+    Tuple(<i32 as ::impex::IntoImpex<TW>>::Impex),
+}
+
+// Custom Serialize - unit variants serialize as strings, others as normal enum variants
+impl<TW: ::impex::WrapperSettings> ::serde::Serialize for MixedEnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ::serde::Serializer,
+    {
+        match self {
+            // Unit variant serializes as just "Empty"
+            Self::Empty(_) => serializer.serialize_str("Empty"),
+            // Named variant serializes as {"Named": {"value": ...}}
+            Self::Named { value } => {
+                use ::serde::ser::SerializeStructVariant;
+                let mut sv =
+                    serializer.serialize_struct_variant("MixedEnumConfigImpex", 1, "Named", 1)?;
+                sv.serialize_field("value", value)?;
+                sv.end()
+            }
+            // Tuple variant serializes as {"Tuple": ...}
+            Self::Tuple(x) => {
+                serializer.serialize_newtype_variant("MixedEnumConfigImpex", 2, "Tuple", x)
+            }
+        }
+    }
+}
+
+// Custom Deserialize - unit variants from strings, others from map
+impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for MixedEnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: ::serde::Deserialize<'de>,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: ::serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        use ::serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+        use std::marker::PhantomData;
+
+        struct MixedEnumVisitor<TW>(PhantomData<TW>);
+
+        impl<'de, TW: ::impex::WrapperSettings> Visitor<'de> for MixedEnumVisitor<TW>
+        where
+            <String as ::impex::IntoImpex<TW>>::Impex: ::serde::Deserialize<'de>,
+            <i32 as ::impex::IntoImpex<TW>>::Impex: ::serde::Deserialize<'de>,
+        {
+            type Value = MixedEnumConfigImpex<TW>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string or map for MixedEnumConfig variant")
+            }
+
+            // Handle unit variant as string: "Empty"
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    "Empty" => Ok(MixedEnumConfigImpex::Empty(
+                        MixedEnumConfigEmptyVisibility { is_explicit: true },
+                    )),
+                    _ => Err(de::Error::unknown_variant(
+                        value,
+                        &["Empty", "Named", "Tuple"],
+                    )),
+                }
+            }
+
+            // Handle non-unit variants as map: {"Named": {...}} or {"Tuple": ...}
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let key: String = map
+                    .next_key()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let result = match key.as_str() {
+                    "Empty" => {
+                        // Handle {"Empty": ...} format - ignore inner value
+                        let _: ::serde::de::IgnoredAny = map.next_value()?;
+                        Ok(MixedEnumConfigImpex::Empty(
+                            MixedEnumConfigEmptyVisibility { is_explicit: true },
+                        ))
+                    }
+                    "Named" => {
+                        #[derive(::serde::Deserialize)]
+                        #[serde(bound = "")]
+                        struct NamedFields<TW: ::impex::WrapperSettings> {
+                            value: <String as ::impex::IntoImpex<TW>>::Impex,
+                        }
+                        let fields: NamedFields<TW> = map.next_value()?;
+                        Ok(MixedEnumConfigImpex::Named {
+                            value: fields.value,
+                        })
+                    }
+                    "Tuple" => {
+                        let value: <i32 as ::impex::IntoImpex<TW>>::Impex = map.next_value()?;
+                        Ok(MixedEnumConfigImpex::Tuple(value))
+                    }
+                    _ => Err(de::Error::unknown_variant(
+                        &key,
+                        &["Empty", "Named", "Tuple"],
+                    )),
+                };
+                // Ensure no extra keys
+                if map.next_key::<String>()?.is_some() {
+                    return Err(de::Error::custom("expected single variant key"));
+                }
+                result
+            }
+        }
+
+        deserializer.deserialize_any(MixedEnumVisitor(PhantomData))
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for MixedEnumConfig {
+    type Impex = MixedEnumConfigImpex<TW>;
+
+    fn into_impex(self, is_explicit: bool) -> Self::Impex {
+        match self {
+            MixedEnumConfig::Empty => {
+                MixedEnumConfigImpex::Empty(MixedEnumConfigEmptyVisibility { is_explicit })
+            }
+            MixedEnumConfig::Named { value } => MixedEnumConfigImpex::Named {
+                value: ::impex::IntoImpex::<TW>::into_impex(value, is_explicit),
+            },
+            MixedEnumConfig::Tuple(x) => {
+                MixedEnumConfigImpex::Tuple(::impex::IntoImpex::<TW>::into_impex(x, is_explicit))
+            }
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for MixedEnumConfigImpex<TW> {
+    type Value = MixedEnumConfig;
+
+    fn is_explicit(&self) -> bool {
+        match self {
+            // Unit variant: check our visibility struct
+            MixedEnumConfigImpex::Empty(v) => v.is_explicit,
+            // Non-unit variants: check if any field is explicit
+            MixedEnumConfigImpex::Named { value } => ::impex::Impex::<TW>::is_explicit(value),
+            MixedEnumConfigImpex::Tuple(x) => ::impex::Impex::<TW>::is_explicit(x),
+        }
+    }
+
+    fn into_value(self) -> Self::Value {
+        match self {
+            MixedEnumConfigImpex::Empty(_) => MixedEnumConfig::Empty,
+            MixedEnumConfigImpex::Named { value } => MixedEnumConfig::Named {
+                value: ::impex::Impex::<TW>::into_value(value),
+            },
+            MixedEnumConfigImpex::Tuple(x) => {
+                MixedEnumConfig::Tuple(::impex::Impex::<TW>::into_value(x))
+            }
+        }
+    }
+
+    fn set_impex(&mut self, v: Self::Value, is_explicit: bool) {
+        *self = match v {
+            MixedEnumConfig::Empty => {
+                MixedEnumConfigImpex::Empty(MixedEnumConfigEmptyVisibility { is_explicit })
+            }
+            MixedEnumConfig::Named { value } => MixedEnumConfigImpex::Named {
+                value: ::impex::IntoImpex::<TW>::into_impex(value, is_explicit),
+            },
+            MixedEnumConfig::Tuple(x) => {
+                MixedEnumConfigImpex::Tuple(::impex::IntoImpex::<TW>::into_impex(x, is_explicit))
+            }
+        };
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Default for MixedEnumConfigImpex<TW> {
+    fn default() -> Self {
+        let c = MixedEnumConfig::default();
+        match c {
+            MixedEnumConfig::Empty => MixedEnumConfigImpex::Empty(Default::default()),
+            MixedEnumConfig::Named { value } => MixedEnumConfigImpex::Named {
+                value: ::impex::IntoImpex::<TW>::into_implicit(value),
+            },
+            MixedEnumConfig::Tuple(x) => {
+                MixedEnumConfigImpex::Tuple(::impex::IntoImpex::<TW>::into_implicit(x))
+            }
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> PartialEq for MixedEnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MixedEnumConfigImpex::Empty(a), MixedEnumConfigImpex::Empty(b)) => a == b,
+            (
+                MixedEnumConfigImpex::Named { value: a },
+                MixedEnumConfigImpex::Named { value: b },
+            ) => a == b,
+            (MixedEnumConfigImpex::Tuple(a), MixedEnumConfigImpex::Tuple(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Eq for MixedEnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: Eq,
+{
+}
+
+#[cfg(feature = "visitor")]
+impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for MixedEnumConfigImpex<TW>
+where
+    <String as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <i32 as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        match self {
+            MixedEnumConfigImpex::Empty { .. } => {
+                // Unit variant has no fields to visit
+            }
+            MixedEnumConfigImpex::Named { value } => {
+                ::impex::Visitor::<T>::visit(value, ctx);
+            }
+            MixedEnumConfigImpex::Tuple(x) => {
+                ::impex::Visitor::<T>::visit(x, ctx);
+            }
+        }
+    }
+}
+
+// ============================================================================
+// StructWithUnitEnum Impex Implementation
+// ============================================================================
+
+impl Default for StructWithUnitEnum {
+    fn default() -> Self {
+        Self {
+            unit_enum: UnionEnumConfig::default(),
+            mixed_enum: MixedEnumConfig::default(),
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[serde(default)]
+pub struct StructWithUnitEnumImpex<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
+    // Unit enum Impex uses inherent method since it doesn't have TW parameter
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
+    pub unit_enum: <UnionEnumConfig as ::impex::IntoImpex<TW>>::Impex,
+    #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
+    pub mixed_enum: <MixedEnumConfig as ::impex::IntoImpex<TW>>::Impex,
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::IntoImpex<TW> for StructWithUnitEnum {
+    type Impex = StructWithUnitEnumImpex<TW>;
+
+    fn into_impex(self, is_explicit: bool) -> Self::Impex {
+        StructWithUnitEnumImpex {
+            unit_enum: ::impex::IntoImpex::<TW>::into_impex(self.unit_enum, is_explicit),
+            mixed_enum: ::impex::IntoImpex::<TW>::into_impex(self.mixed_enum, is_explicit),
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> ::impex::Impex<TW> for StructWithUnitEnumImpex<TW> {
+    type Value = StructWithUnitEnum;
+
+    fn is_explicit(&self) -> bool {
+        ::impex::Impex::<TW>::is_explicit(&self.unit_enum)
+            || ::impex::Impex::<TW>::is_explicit(&self.mixed_enum)
+    }
+
+    fn into_value(self) -> Self::Value {
+        StructWithUnitEnum {
+            unit_enum: ::impex::Impex::<TW>::into_value(self.unit_enum),
+            mixed_enum: ::impex::Impex::<TW>::into_value(self.mixed_enum),
+        }
+    }
+
+    fn set_impex(&mut self, v: Self::Value, is_explicit: bool) {
+        ::impex::Impex::<TW>::set_impex(&mut self.unit_enum, v.unit_enum, is_explicit);
+        ::impex::Impex::<TW>::set_impex(&mut self.mixed_enum, v.mixed_enum, is_explicit);
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Default for StructWithUnitEnumImpex<TW> {
+    fn default() -> Self {
+        let x = StructWithUnitEnum::default();
+        Self {
+            unit_enum: ::impex::IntoImpex::<TW>::into_implicit(x.unit_enum),
+            mixed_enum: ::impex::IntoImpex::<TW>::into_implicit(x.mixed_enum),
+        }
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> PartialEq for StructWithUnitEnumImpex<TW>
+where
+    <UnionEnumConfig as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+    <MixedEnumConfig as ::impex::IntoImpex<TW>>::Impex: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.unit_enum == other.unit_enum && self.mixed_enum == other.mixed_enum
+    }
+}
+
+impl<TW: ::impex::WrapperSettings> Eq for StructWithUnitEnumImpex<TW>
+where
+    <UnionEnumConfig as ::impex::IntoImpex<TW>>::Impex: Eq,
+    <MixedEnumConfig as ::impex::IntoImpex<TW>>::Impex: Eq,
+{
+}
+
+#[cfg(feature = "visitor")]
+impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for StructWithUnitEnumImpex<TW>
+where
+    <UnionEnumConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+    <MixedEnumConfig as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        ::impex::Visitor::<T>::visit(&mut self.unit_enum, ctx);
+        ::impex::Visitor::<T>::visit(&mut self.mixed_enum, ctx);
     }
 }

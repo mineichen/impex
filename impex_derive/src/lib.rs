@@ -232,7 +232,7 @@ fn generate_named_struct(
         let name = &f.ident;
         let ty = &f.ty;
         quote! {
-            #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
+            #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
             #name: <#ty as ::impex::IntoImpex<TW>>::Impex
         }
     });
@@ -631,6 +631,57 @@ fn generate_tuple_struct(
     }
 }
 
+/// Generate a visibility struct for a unit variant.
+/// The visibility struct tracks explicit/implicit state and handles serialization.
+fn generate_visibility_struct(
+    vis: &syn::Visibility,
+    visibility_name: &Ident,
+    variant_str: &str,
+) -> proc_macro2::TokenStream {
+    quote! {
+        /// Visibility marker for unit variant - tracks explicit/implicit state
+        #[derive(Debug, Clone)]
+        #vis struct #visibility_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
+            is_explicit: bool,
+            #[doc(hidden)]
+            _phantom: ::std::marker::PhantomData<TW>,
+        }
+
+        impl<TW: ::impex::WrapperSettings> PartialEq for #visibility_name<TW> {
+            fn eq(&self, other: &Self) -> bool {
+                self.is_explicit == other.is_explicit
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> Eq for #visibility_name<TW> {}
+
+        impl<TW: ::impex::WrapperSettings> Default for #visibility_name<TW> {
+            fn default() -> Self {
+                Self { is_explicit: false, _phantom: ::std::marker::PhantomData } // Default is implicit
+            }
+        }
+
+        impl<TW: ::impex::WrapperSettings> ::serde::Serialize for #visibility_name<TW> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                serializer.serialize_str(#variant_str)
+            }
+        }
+
+        impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for #visibility_name<TW> {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                let _ = String::deserialize(deserializer)?;
+                Ok(Self { is_explicit: true, _phantom: ::std::marker::PhantomData })
+            }
+        }
+    }
+}
+
 fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2::TokenStream {
     let GenerateContext {
         impex_name,
@@ -641,7 +692,28 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         has_eq,
     } = ctx;
 
-    // Generate enum variants without serde attributes
+    // Collect unit variants to generate visibility structs for them
+    let unit_variants: Vec<_> = data_enum
+        .variants
+        .iter()
+        .filter(|v| matches!(v.fields, Fields::Unit))
+        .collect();
+
+    // Generate visibility structs for unit variants
+    let visibility_structs: Vec<_> = unit_variants
+        .iter()
+        .map(|variant| {
+            let variant_name = &variant.ident;
+            let visibility_name = Ident::new(
+                &format!("{}{}Visibility", impex_name, variant_name),
+                variant_name.span(),
+            );
+            let variant_str = variant_name.to_string();
+            generate_visibility_struct(&vis, &visibility_name, &variant_str)
+        })
+        .collect();
+
+    // Generate enum variants - unit variants become tuple variants with visibility struct
     let impex_variants = data_enum.variants.iter().map(|variant| {
         let variant_name = &variant.ident;
         match &variant.fields {
@@ -670,41 +742,16 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     #variant_name(#(#fields),*)
                 }
             }
-            Fields::Unit => quote! { #variant_name },
-        }
-    });
-
-    // Generate serde enum variants with attributes
-    let serde_variants = data_enum.variants.iter().map(|variant| {
-        let variant_name = &variant.ident;
-        match &variant.fields {
-            Fields::Named(fields) => {
-                let fields = fields.named.iter().map(|f| {
-                    let name = &f.ident;
-                    let ty = &f.ty;
-                    quote! {
-                        #[serde(skip_serializing_if = "::impex::Impex::is_implicit")]
-                        #name: <#ty as ::impex::IntoImpex<TW>>::Impex
-                    }
-                });
+            // Unit variants become tuple variants with visibility struct
+            Fields::Unit => {
+                let visibility_name = Ident::new(
+                    &format!("{}{}Visibility", impex_name, variant_name),
+                    variant_name.span(),
+                );
                 quote! {
-                    #variant_name {
-                        #(#fields),*
-                    }
+                    #variant_name(#visibility_name<TW>)
                 }
             }
-            Fields::Unnamed(fields) => {
-                let fields = fields.unnamed.iter().map(|f| {
-                    let ty = &f.ty;
-                    quote! {
-                        <#ty as ::impex::IntoImpex<TW>>::Impex
-                    }
-                });
-                quote! {
-                    #variant_name(#(#fields),*)
-                }
-            }
-            Fields::Unit => quote! { #variant_name },
         }
     });
 
@@ -740,9 +787,16 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     )
                 }
             }
-            Fields::Unit => quote! {
-                #original_name::#variant_name => #impex_name::#variant_name
-            },
+            // Unit variants use visibility struct
+            Fields::Unit => {
+                let visibility_name = Ident::new(
+                    &format!("{}{}Visibility", impex_name, variant_name),
+                    variant_name.span(),
+                );
+                quote! {
+                    #original_name::#variant_name => #impex_name::#variant_name(#visibility_name { is_explicit, _phantom: ::std::marker::PhantomData })
+                }
+            }
         }
     });
 
@@ -778,8 +832,9 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     }
                 }
             }
+            // Unit variants check visibility struct
             Fields::Unit => quote! {
-                #impex_name::#variant_name => false
+                #impex_name::#variant_name(v) => v.is_explicit
             },
         }
     });
@@ -816,8 +871,9 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     )
                 }
             }
+            // Unit variants return original unit variant
             Fields::Unit => quote! {
-                #impex_name::#variant_name => #original_name::#variant_name
+                #impex_name::#variant_name(_) => #original_name::#variant_name
             },
         }
     });
@@ -854,9 +910,16 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     )
                 }
             }
-            Fields::Unit => quote! {
-                Self::Value::#variant_name => #impex_name::#variant_name
-            },
+            // Unit variants use visibility struct
+            Fields::Unit => {
+                let visibility_name = Ident::new(
+                    &format!("{}{}Visibility", impex_name, variant_name),
+                    variant_name.span(),
+                );
+                quote! {
+                    Self::Value::#variant_name => #impex_name::#variant_name(#visibility_name { is_explicit, _phantom: ::std::marker::PhantomData })
+                }
+            }
         }
     });
 
@@ -892,8 +955,9 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                     )
                 }
             }
+            // Unit variants use default visibility (is_explicit: false)
             Fields::Unit => quote! {
-                #original_name::#variant_name => Self::#variant_name
+                #original_name::#variant_name => Self::#variant_name(Default::default())
             },
         }
     });
@@ -950,16 +1014,22 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                         }
                     }
                 }
+                // Unit variants (now tuple variants with visibility) have no fields to visit
                 Fields::Unit => quote! {
-                    Self::#variant_name => {}
+                    Self::#variant_name(_) => {}
                 },
             }
         });
 
+        let visitor_where_clauses: Vec<_> = visitor_where_clauses.collect();
+        let where_clause = if visitor_where_clauses.is_empty() {
+            quote! {}
+        } else {
+            quote! { where #(#visitor_where_clauses),* }
+        };
         quote! {
             impl<T, TW: ::impex::WrapperSettings> ::impex::Visitor<T> for #impex_name<TW>
-            where
-                #(#visitor_where_clauses),*
+            #where_clause
             {
                 fn visit(&mut self, ctx: &mut T) {
                     match self {
@@ -1046,21 +1116,29 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                         }
                     }
                 }
+                // Unit variants (now tuple variants with visibility) compare visibility
                 Fields::Unit => quote! {
-                    (Self::#variant_name, Self::#variant_name) => true
+                    (Self::#variant_name(a), Self::#variant_name(b)) => a == b
                 },
             }
         });
 
+        let partial_eq_where_clauses: Vec<_> = partial_eq_where_clauses.collect();
+        let eq_where_clauses: Vec<_> = eq_where_clauses.collect();
+
         if has_partial_eq {
+            let where_clause = if partial_eq_where_clauses.is_empty() {
+                quote! {}
+            } else {
+                quote! { where #(#partial_eq_where_clauses),* }
+            };
             partial_eq_impl = quote! {
                 impl<TW: ::impex::WrapperSettings> PartialEq for #impex_name<TW>
-                where
-                    #(#partial_eq_where_clauses),*
+                #where_clause
                 {
                     fn eq(&self, other: &Self) -> bool {
                         match (self, other) {
-                            #(#partial_eq_match_arms),*
+                            #(#partial_eq_match_arms,)*
                             _ => false,
                         }
                     }
@@ -1069,155 +1147,277 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
         };
 
         if has_eq {
+            let where_clause = if eq_where_clauses.is_empty() {
+                quote! {}
+            } else {
+                quote! { where #(#eq_where_clauses),* }
+            };
             eq_impl = quote! {
                 impl<TW: ::impex::WrapperSettings> Eq for #impex_name<TW>
-                where
-                    #(#eq_where_clauses),*
+                #where_clause
                 {}
             }
         }
     }
 
-    // Generate conversion match arms between impex and serde enums
-    let serde_enum_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
-
-    let serde_to_impex_arms = data_enum.variants.iter().map(|variant| {
-        let variant_name = &variant.ident;
-        match &variant.fields {
-            Fields::Named(fields) => {
-                let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
-                quote! {
-                    #serde_enum_name::#variant_name { #(#field_names),* } =>
-                        #impex_name::#variant_name { #(#field_names),* }
-                }
-            }
-            Fields::Unnamed(fields) => {
-                let field_names: Vec<Ident> = (0..fields.unnamed.len())
-                    .map(|i| Ident::new(&format!("x{}", i + 1), variant_name.span()))
-                    .collect();
-                quote! {
-                    #serde_enum_name::#variant_name(#(#field_names),*) =>
-                        #impex_name::#variant_name(#(#field_names),*)
-                }
-            }
-            Fields::Unit => quote! {
-                #serde_enum_name::#variant_name => #impex_name::#variant_name
-            },
-        }
-    });
-
-    let impex_to_serde_arms: Vec<_> = data_enum
-        .variants
-        .iter()
-        .map(|variant| {
-            let variant_name = &variant.ident;
-            match &variant.fields {
-                Fields::Named(fields) => {
-                    let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
-                    quote! {
-                        #impex_name::#variant_name { #(#field_names),* } =>
-                            #serde_enum_name::#variant_name { #(#field_names),* }
-                    }
-                }
-                Fields::Unnamed(fields) => {
-                    let field_names: Vec<Ident> = (0..fields.unnamed.len())
-                        .map(|i| Ident::new(&format!("x{}", i + 1), variant_name.span()))
-                        .collect();
-                    quote! {
-                        #impex_name::#variant_name(#(#field_names),*) =>
-                            #serde_enum_name::#variant_name(#(#field_names),*)
-                    }
-                }
-                Fields::Unit => quote! {
-                    #impex_name::#variant_name => #serde_enum_name::#variant_name
-                },
-            }
-        })
-        .collect();
-
-    // Collect all field types for where clauses
-    let mut all_field_types = Vec::new();
+    // Collect field types for serde where clauses
+    let mut serde_field_types = Vec::new();
     for variant in &data_enum.variants {
         match &variant.fields {
             Fields::Named(fields) => {
-                all_field_types.extend(fields.named.iter().map(|f| &f.ty));
+                serde_field_types.extend(fields.named.iter().map(|f| &f.ty));
             }
             Fields::Unnamed(fields) => {
-                all_field_types.extend(fields.unnamed.iter().map(|f| &f.ty));
+                serde_field_types.extend(fields.unnamed.iter().map(|f| &f.ty));
             }
             Fields::Unit => {}
         }
     }
 
-    let serde_where_clauses: Vec<_> = all_field_types.iter().map(|ty| {
-        quote! {
-            <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
+    let serialize_where_clauses: Vec<_> = serde_field_types
+        .iter()
+        .map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize
+            }
+        })
+        .collect();
+
+    let deserialize_where_clauses: Vec<_> = serde_field_types
+        .iter()
+        .map(|ty| {
+            quote! {
+                <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::de::DeserializeOwned
+            }
+        })
+        .collect();
+
+    // Collect variant info for serialize/deserialize
+    let variant_names_str: Vec<_> = data_enum
+        .variants
+        .iter()
+        .map(|v| v.ident.to_string())
+        .collect();
+
+    // Generate serialize match arms
+    let serialize_arms: Vec<_> = data_enum.variants.iter().enumerate().map(|(idx, variant)| {
+        let variant_name = &variant.ident;
+        let variant_str = variant_name.to_string();
+        let idx_u32 = idx as u32;
+        match &variant.fields {
+            Fields::Named(fields) => {
+                let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                let field_count = field_names.len();
+                quote! {
+                    Self::#variant_name { #(#field_names),* } => {
+                        use ::serde::ser::SerializeStructVariant;
+                        let mut sv = serializer.serialize_struct_variant(
+                            stringify!(#impex_name),
+                            #idx_u32,
+                            #variant_str,
+                            #field_count,
+                        )?;
+                        #(sv.serialize_field(stringify!(#field_names), #field_names)?;)*
+                        sv.end()
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                if fields.unnamed.len() == 1 {
+                    quote! {
+                        Self::#variant_name(x) => {
+                            serializer.serialize_newtype_variant(stringify!(#impex_name), #idx_u32, #variant_str, x)
+                        }
+                    }
+                } else {
+                    let field_names: Vec<Ident> = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("x{}", i), variant_name.span()))
+                        .collect();
+                    let field_count = field_names.len();
+                    quote! {
+                        Self::#variant_name(#(#field_names),*) => {
+                            use ::serde::ser::SerializeTupleVariant;
+                            let mut tv = serializer.serialize_tuple_variant(
+                                stringify!(#impex_name),
+                                #idx_u32,
+                                #variant_str,
+                                #field_count,
+                            )?;
+                            #(tv.serialize_field(#field_names)?;)*
+                            tv.end()
+                        }
+                    }
+                }
+            }
+            // Unit variants serialize as just the string
+            Fields::Unit => {
+                quote! {
+                    Self::#variant_name(_) => serializer.serialize_str(#variant_str)
+                }
+            }
         }
     }).collect();
 
+    // Generate deserialize visit_str arms for unit variants
+    let deserialize_str_arms: Vec<_> = data_enum.variants.iter().filter_map(|variant| {
+        if matches!(variant.fields, Fields::Unit) {
+            let variant_name = &variant.ident;
+            let variant_str = variant_name.to_string();
+            let visibility_name = Ident::new(
+                &format!("{}{}Visibility", impex_name, variant_name),
+                variant_name.span(),
+            );
+            Some(quote! {
+                #variant_str => Ok(#impex_name::#variant_name(#visibility_name { is_explicit: true, _phantom: ::std::marker::PhantomData }))
+            })
+        } else {
+            None
+        }
+    }).collect();
+
+    // Generate deserialize visit_map arms for all variants
+    let deserialize_map_arms: Vec<_> = data_enum.variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        let variant_str = variant_name.to_string();
+        match &variant.fields {
+            Fields::Named(fields) => {
+                let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
+                quote! {
+                    #variant_str => {
+                        #[derive(::serde::Deserialize)]
+                        #[serde(bound = "")]
+                        struct __Fields<TW: ::impex::WrapperSettings> {
+                            #(#field_names: <#field_types as ::impex::IntoImpex<TW>>::Impex),*
+                        }
+                        let fields: __Fields<TW> = map.next_value()?;
+                        Ok(#impex_name::#variant_name { #(#field_names: fields.#field_names),* })
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                if fields.unnamed.len() == 1 {
+                    let ty = &fields.unnamed[0].ty;
+                    quote! {
+                        #variant_str => {
+                            let value: <#ty as ::impex::IntoImpex<TW>>::Impex = map.next_value()?;
+                            Ok(#impex_name::#variant_name(value))
+                        }
+                    }
+                } else {
+                    let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
+                    let field_indices: Vec<syn::Index> = (0..fields.unnamed.len())
+                        .map(|i| syn::Index::from(i))
+                        .collect();
+                    quote! {
+                        #variant_str => {
+                            let value: (#(<#field_types as ::impex::IntoImpex<TW>>::Impex),*,) = map.next_value()?;
+                            Ok(#impex_name::#variant_name(#(value.#field_indices),*))
+                        }
+                    }
+                }
+            }
+            // Unit variants in map format (for backwards compat)
+            Fields::Unit => {
+                let visibility_name = Ident::new(
+                    &format!("{}{}Visibility", impex_name, variant_name),
+                    variant_name.span(),
+                );
+                quote! {
+                    #variant_str => {
+                        let _: ::serde::de::IgnoredAny = map.next_value()?;
+                        Ok(#impex_name::#variant_name(#visibility_name { is_explicit: true, _phantom: ::std::marker::PhantomData }))
+                    }
+                }
+            }
+        }
+    }).collect();
+
+    let serialize_where_clause = if serialize_where_clauses.is_empty() {
+        quote! {}
+    } else {
+        quote! { where #(#serialize_where_clauses),* }
+    };
+    let deserialize_where_clause = if deserialize_where_clauses.is_empty() {
+        quote! {}
+    } else {
+        quote! { where #(#deserialize_where_clauses),* }
+    };
+
     quote! {
+        // Visibility structs for unit variants
+        #(#visibility_structs)*
+
         #[derive(Clone, #derives)]
         #vis enum #impex_name<TW: ::impex::WrapperSettings = ::impex::DefaultWrapperSettings> {
             #(#impex_variants),*
         }
 
-        #[derive(::serde::Serialize, ::serde::Deserialize)]
-        #[serde(bound = "")]
-        enum #serde_enum_name<TW: ::impex::WrapperSettings> {
-            #(#serde_variants),*
-        }
-
-        impl<TW: ::impex::WrapperSettings> Default for #serde_enum_name<TW>
-        where
-            #(#serde_where_clauses),*
-        {
-            fn default() -> Self {
-                let default_value = #original_name::default();
-                let impex: #impex_name<TW> = ::impex::IntoImpex::into_impex(default_value, false);
-                impex.into()
-            }
-        }
-
-        impl<TW: ::impex::WrapperSettings> From<#serde_enum_name<TW>> for #impex_name<TW> {
-            fn from(value: #serde_enum_name<TW>) -> Self {
-                match value {
-                    #(#serde_to_impex_arms),*
-                }
-            }
-        }
-
-        impl<TW: ::impex::WrapperSettings> From<#impex_name<TW>> for #serde_enum_name<TW> {
-            fn from(value: #impex_name<TW>) -> Self {
-                match value {
-                    #(#impex_to_serde_arms),*
-                }
-            }
-        }
-
+        // Custom Serialize - unit variants as strings, others as normal
         impl<TW: ::impex::WrapperSettings> ::serde::Serialize for #impex_name<TW>
-        where
-            #(#serde_where_clauses,)*
-            Self: Clone,
+        #serialize_where_clause
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: ::serde::Serializer,
             {
-                let serde_enum: #serde_enum_name<TW> = self.clone().into();
-                serde_enum.serialize(serializer)
+                match self {
+                    #(#serialize_arms),*
+                }
             }
         }
 
+        // Custom Deserialize - unit variants from strings, others from map
         impl<'de, TW: ::impex::WrapperSettings> ::serde::Deserialize<'de> for #impex_name<TW>
-        where
-            #(#serde_where_clauses),*
+        #deserialize_where_clause
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
                 D: ::serde::Deserializer<'de>,
             {
-                let serde_enum = #serde_enum_name::<TW>::deserialize(deserializer)?;
-                Ok(serde_enum.into())
+                use ::serde::de::{self, MapAccess, Visitor};
+                use std::fmt;
+                use std::marker::PhantomData;
+
+                struct __Visitor<TW>(PhantomData<TW>);
+
+                impl<'de, TW: ::impex::WrapperSettings> Visitor<'de> for __Visitor<TW>
+                #deserialize_where_clause
+                {
+                    type Value = #impex_name<TW>;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str(concat!("a string or map for ", stringify!(#impex_name)))
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            #(#deserialize_str_arms,)*
+                            _ => Err(de::Error::unknown_variant(value, &[#(#variant_names_str),*])),
+                        }
+                    }
+
+                    fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+                    where
+                        M: MapAccess<'de>,
+                    {
+                        let key: String = map.next_key()?
+                            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                        let result = match key.as_str() {
+                            #(#deserialize_map_arms,)*
+                            _ => Err(de::Error::unknown_variant(&key, &[#(#variant_names_str),*])),
+                        };
+                        if map.next_key::<String>()?.is_some() {
+                            return Err(de::Error::custom("expected single variant key"));
+                        }
+                        result
+                    }
+                }
+
+                deserializer.deserialize_any(__Visitor(PhantomData))
             }
         }
 
