@@ -112,6 +112,13 @@ impl ImpexPrimitive for std::num::NonZeroU32 {}
 impl ImpexPrimitive for std::num::NonZeroU64 {}
 impl ImpexPrimitive for std::num::NonZeroU128 {}
 impl ImpexPrimitive for std::num::NonZeroUsize {}
+impl ImpexPrimitive for std::path::PathBuf {}
+impl ImpexPrimitive for std::net::IpAddr {}
+impl ImpexPrimitive for std::net::Ipv4Addr {}
+impl ImpexPrimitive for std::net::Ipv6Addr {}
+impl ImpexPrimitive for std::net::SocketAddr {}
+impl ImpexPrimitive for std::net::SocketAddrV4 {}
+impl ImpexPrimitive for std::net::SocketAddrV6 {}
 ///
 /// Wraps a normal value so it can be turned into a impex, even if the type doesn't implement IntoImpex
 /// This should be a field attribute #[impex(primitive)] in the macro
