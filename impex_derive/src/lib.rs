@@ -244,13 +244,6 @@ fn generate_named_struct(
         })
         .collect();
 
-    let serde_into_fields: Vec<_> = field_names
-        .iter()
-        .map(|name| {
-            quote! { #name: self.#name }
-        })
-        .collect();
-
     let serde_where_clauses: Vec<_> = field_types.iter().map(|ty| {
         quote! {
             <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
@@ -508,12 +501,6 @@ fn generate_tuple_struct(
 
     // Generate serialization struct
     let serde_struct_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
-    let serde_into_fields: Vec<_> = field_indices
-        .iter()
-        .map(|idx| {
-            quote! { self.#idx }
-        })
-        .collect();
     let serde_from_fields: Vec<_> = field_indices
         .iter()
         .map(|idx| {
@@ -709,7 +696,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                 variant_name.span(),
             );
             let variant_str = variant_name.to_string();
-            generate_visibility_struct(&vis, &visibility_name, &variant_str)
+            generate_visibility_struct(vis, &visibility_name, &variant_str)
         })
         .collect();
 
@@ -1307,7 +1294,7 @@ fn generate_enum(ctx: GenerateContext, data_enum: &syn::DataEnum) -> proc_macro2
                 } else {
                     let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
                     let field_indices: Vec<syn::Index> = (0..fields.unnamed.len())
-                        .map(|i| syn::Index::from(i))
+                        .map(syn::Index::from)
                         .collect();
                     quote! {
                         #variant_str => {
