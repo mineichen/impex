@@ -1,6 +1,7 @@
 #![doc = include_str!("../../README.md")]
 use std::fmt::Debug;
 
+mod array;
 mod option;
 mod primitive;
 mod vec;
