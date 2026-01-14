@@ -25,3 +25,13 @@ impl<TW, T: Impex<TW>, const SIZE: usize> Impex<TW> for [T; SIZE] {
         });
     }
 }
+
+#[cfg(feature = "visitor")]
+impl<T, U, const SIZE: usize> crate::Visitor<T> for [U; SIZE]
+where
+    U: crate::Visitor<T>,
+{
+    fn visit(&mut self, ctx: &mut T) {
+        self.iter_mut().for_each(|x| x.visit(ctx));
+    }
+}
