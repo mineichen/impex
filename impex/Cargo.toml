@@ -2,11 +2,14 @@
 name = "impex"
 version = "0.1.0"
 edition = "2024"
-readme = "../README.md"
+description = "Implicit/Explicit struct fields for serde serialization"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/mineichen/impex"
 
 [dependencies]
 serde = { version = "1" }
-impex_derive = { path = "../impex_derive", optional = true }
+impex_derive = { path = "../impex_derive", version = "0.1.0", optional = true }
 
 
 [features]
