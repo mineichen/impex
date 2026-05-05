@@ -1,5 +1,5 @@
 [package]
-name = "impex_derive"
+name = "impex-derive"
 version = "0.1.0"
 edition = "2024"
 description = "Procedural macro crate for impex"

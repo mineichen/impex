@@ -1,4 +1,3 @@
 [workspace]
-members = ["impex", "impex_derive"]
+members = ["impex", "impex-derive"]
 resolver = "3"
-

@@ -7,13 +7,13 @@ name = "impex"
 version = "0.1.0"
 dependencies = [
  "impex",
- "impex_derive",
+ "impex-derive",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "impex_derive"
+name = "impex-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
