@@ -41,6 +41,17 @@ pub fn derive_impex(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+fn is_primitive_field(field: &syn::Field) -> bool {
+    field.attrs.iter().any(|attr| {
+        if !attr.path().is_ident("impex") {
+            return false;
+        }
+        attr.parse_args::<syn::Path>()
+            .map(|p| p.is_ident("primitive"))
+            .unwrap_or(false)
+    })
+}
+
 fn parse_impex_attributes(attrs: &[syn::Attribute]) -> (proc_macro2::TokenStream, bool, bool) {
     let has_partial_eq = &mut false;
     let has_eq = &mut false;
@@ -102,25 +113,40 @@ fn generate_named_struct(
 
     let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
     let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
+    let is_primitive: Vec<_> = fields.named.iter().map(|f| is_primitive_field(f)).collect();
 
-    // Generate the Impex struct definition (without serde attributes)
-    let impex_fields = fields.named.iter().map(|f| {
+    let impex_types: Vec<proc_macro2::TokenStream> = field_types
+        .iter()
+        .zip(is_primitive.iter())
+        .map(|(ty, &is_prim)| {
+            if is_prim {
+                quote! { <::impex::PrimitiveWrapper<#ty> as ::impex::IntoImpex<TW>>::Impex }
+            } else {
+                quote! { <#ty as ::impex::IntoImpex<TW>>::Impex }
+            }
+        })
+        .collect();
+
+    let impex_fields = fields.named.iter().zip(impex_types.iter()).map(|(f, impex_ty)| {
         let name = &f.ident;
-        let ty = &f.ty;
         let field_vis = &f.vis;
         quote! {
-            #field_vis #name: <#ty as ::impex::IntoImpex<TW>>::Impex
+            #field_vis #name: #impex_ty
         }
     });
 
-    // Generate IntoImpex implementation
-    let into_impex_fields = field_names.iter().map(|name| {
-        quote! {
-            #name: ::impex::IntoImpex::<TW>::into_impex(self.#name, is_explicit)
+    let into_impex_fields = field_names.iter().zip(is_primitive.iter()).map(|(name, &is_prim)| {
+        if is_prim {
+            quote! {
+                #name: ::impex::IntoImpex::<TW>::into_impex(::impex::PrimitiveWrapper(self.#name), is_explicit)
+            }
+        } else {
+            quote! {
+                #name: ::impex::IntoImpex::<TW>::into_impex(self.#name, is_explicit)
+            }
         }
     });
 
-    // Generate is_explicit check (all fields OR'd together)
     let mut field_iter = field_names.iter();
     let is_explicit_body = if let Some(first) = field_iter.next() {
         let first_check = quote! { ::impex::Impex::<TW>::is_explicit(&self.#first) };
@@ -134,32 +160,46 @@ fn generate_named_struct(
         quote! { false }
     };
 
-    // Generate into_value implementation
-    let into_value_fields = field_names.iter().map(|name| {
-        quote! {
-            #name: ::impex::Impex::<TW>::into_value(self.#name)
-        }
-    });
-
-    // Generate set_impex implementation (all fields)
-    let set_impex_fields = field_names.iter().map(|name| {
-        quote! {
-            ::impex::Impex::<TW>::set_impex(&mut self.#name, v.#name, is_explicit);
-        }
-    });
-
-    // Generate default implementation
-    let default_fields = field_names.iter().map(|name| {
-        quote! {
-            #name: ::impex::IntoImpex::<TW>::into_implicit(x.#name)
-        }
-    });
-
-    // Generate Visitor implementation (only if visitor feature is enabled)
-    let visitor_impl = if cfg!(feature = "visitor") {
-        let visitor_where_clauses = field_types.iter().map(|ty| {
+    let into_value_fields = field_names.iter().zip(is_primitive.iter()).map(|(name, &is_prim)| {
+        if is_prim {
             quote! {
-                <#ty as ::impex::IntoImpex<TW>>::Impex: ::impex::Visitor<T>
+                #name: ::impex::Impex::<TW>::into_value(self.#name).0
+            }
+        } else {
+            quote! {
+                #name: ::impex::Impex::<TW>::into_value(self.#name)
+            }
+        }
+    });
+
+    let set_impex_fields = field_names.iter().zip(is_primitive.iter()).map(|(name, &is_prim)| {
+        if is_prim {
+            quote! {
+                ::impex::Impex::<TW>::set_impex(&mut self.#name, ::impex::PrimitiveWrapper(v.#name), is_explicit);
+            }
+        } else {
+            quote! {
+                ::impex::Impex::<TW>::set_impex(&mut self.#name, v.#name, is_explicit);
+            }
+        }
+    });
+
+    let default_fields = field_names.iter().zip(is_primitive.iter()).map(|(name, &is_prim)| {
+        if is_prim {
+            quote! {
+                #name: ::impex::IntoImpex::<TW>::into_implicit(::impex::PrimitiveWrapper(x.#name))
+            }
+        } else {
+            quote! {
+                #name: ::impex::IntoImpex::<TW>::into_implicit(x.#name)
+            }
+        }
+    });
+
+    let visitor_impl = if cfg!(feature = "visitor") {
+        let visitor_where_clauses = impex_types.iter().map(|impex_ty| {
+            quote! {
+                #impex_ty: ::impex::Visitor<T>
             }
         });
 
@@ -183,19 +223,18 @@ fn generate_named_struct(
         quote! {}
     };
 
-    // Generate PartialEq and Eq implementations with proper bounds
     let mut eq_impl = quote! {};
     let mut partial_eq_impl = quote! {};
     if has_partial_eq || has_eq {
-        let partial_eq_where_clauses = field_types.iter().map(|ty| {
+        let partial_eq_where_clauses = impex_types.iter().map(|impex_ty| {
             quote! {
-                <#ty as ::impex::IntoImpex<TW>>::Impex: PartialEq
+                #impex_ty: PartialEq
             }
         });
 
-        let eq_where_clauses = field_types.iter().map(|ty| {
+        let eq_where_clauses = impex_types.iter().map(|impex_ty| {
             quote! {
-                <#ty as ::impex::IntoImpex<TW>>::Impex: Eq
+                #impex_ty: Eq
             }
         });
 
@@ -226,14 +265,12 @@ fn generate_named_struct(
         }
     }
 
-    // Generate serialization struct with serde attributes
     let serde_struct_name = Ident::new(&format!("{}Serde", impex_name), impex_name.span());
-    let serde_fields = fields.named.iter().map(|f| {
+    let serde_fields = fields.named.iter().zip(impex_types.iter()).map(|(f, impex_ty)| {
         let name = &f.ident;
-        let ty = &f.ty;
         quote! {
             #[serde(skip_serializing_if = "::impex::Impex::<TW>::is_implicit")]
-            #name: <#ty as ::impex::IntoImpex<TW>>::Impex
+            #name: #impex_ty
         }
     });
 
@@ -244,9 +281,9 @@ fn generate_named_struct(
         })
         .collect();
 
-    let serde_where_clauses: Vec<_> = field_types.iter().map(|ty| {
+    let serde_where_clauses: Vec<_> = impex_types.iter().map(|impex_ty| {
         quote! {
-            <#ty as ::impex::IntoImpex<TW>>::Impex: ::serde::Serialize + ::serde::de::DeserializeOwned
+            #impex_ty: ::serde::Serialize + ::serde::de::DeserializeOwned
         }
     }).collect();
 

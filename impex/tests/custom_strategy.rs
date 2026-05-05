@@ -165,3 +165,43 @@ fn test_visitor() {
     assert_eq!(foo_value.variable_name, Some(variable_name));
     assert_eq!(tuple_struct_config.0.variable_name, Some(variable_name));
 }
+
+#[derive(
+    Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Default,
+)]
+struct CustomPoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Default, impex::Impex)]
+struct StructWithPrimitiveForStrategy {
+    normal_field: u32,
+    #[impex(primitive)]
+    custom: CustomPoint,
+}
+
+#[test]
+fn primitive_field_with_custom_strategy() {
+    let text = r#"{"normal_field":43,"custom":{"x":1.0,"y":2.0}}"#;
+    let config: StructWithPrimitiveForStrategyImpex<MyWrapperSettings> =
+        serde_json::from_str(text).unwrap();
+
+    assert!(config.normal_field.is_explicit());
+    assert_eq!(*config.normal_field, 43);
+    assert!(config.custom.is_explicit());
+
+    let value: StructWithPrimitiveForStrategy =
+        <_ as Impex<MyWrapperSettings>>::into_value(config);
+    assert_eq!(value.normal_field, 43);
+    assert_eq!(value.custom, CustomPoint { x: 1.0, y: 2.0 });
+
+    let json_implicit = r#"{"normal_field":43}"#;
+    let config2: StructWithPrimitiveForStrategyImpex<MyWrapperSettings> =
+        serde_json::from_str(json_implicit).unwrap();
+    assert!(config2.normal_field.is_explicit());
+    assert!(config2.custom.is_implicit());
+
+    let serialized = serde_json::to_string(&config2).unwrap();
+    assert_eq!(serialized, json_implicit);
+}

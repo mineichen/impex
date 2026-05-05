@@ -386,6 +386,46 @@ fn option_impex_explicit_value_reserializes() {
     assert_eq!(serialized, r#"{"opt":42}"#);
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+struct CustomPoint {
+    x: f64,
+    y: f64,
+}
+#[derive(Default, impex::Impex)]
+struct StructWithPrimitiveField {
+    normal_field: u32,
+    #[impex(primitive)]
+    custom: CustomPoint,
+}
+
+#[test]
+fn primitive_field_attribute_roundtrip() {
+    use impex::Impex;
+
+    let json = r#"{"normal_field":42,"custom":{"x":1.5,"y":2.5}}"#;
+    let obj: StructWithPrimitiveFieldImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json).unwrap();
+
+    assert!(obj.normal_field.is_explicit());
+    assert!(obj.custom.is_explicit());
+    assert_eq!(*obj.normal_field, 42);
+
+    let value: StructWithPrimitiveField =
+        <_ as Impex<impex::DefaultWrapperSettings>>::into_value(obj);
+    assert_eq!(value.normal_field, 42);
+    assert_eq!(value.custom, CustomPoint { x: 1.5, y: 2.5 });
+
+    let json_implicit = r#"{"normal_field":42}"#;
+    let obj2: StructWithPrimitiveFieldImpex<impex::DefaultWrapperSettings> =
+        serde_json::from_str(json_implicit).unwrap();
+
+    assert!(obj2.normal_field.is_explicit());
+    assert!(obj2.custom.is_implicit());
+
+    let serialized = serde_json::to_string(&obj2).unwrap();
+    assert_eq!(serialized, json_implicit);
+}
+
 #[test]
 fn some_option_impex_explicit_null_reserializes_as_null() {
     // Deserialize with explicit null

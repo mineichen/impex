@@ -125,7 +125,7 @@ impl ImpexPrimitive for std::net::SocketAddrV6 {}
 ///
 #[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, std::fmt::Debug, Clone)]
 pub struct PrimitiveWrapper<T>(pub T);
-impl<T: serde::de::DeserializeOwned + PartialEq + Eq + serde::Serialize + Debug + Clone>
-    ImpexPrimitive for PrimitiveWrapper<T>
+impl<T: serde::de::DeserializeOwned + serde::Serialize + Debug + Clone> ImpexPrimitive
+    for PrimitiveWrapper<T>
 {
 }
